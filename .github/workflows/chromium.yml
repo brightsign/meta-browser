@@ -36,8 +36,10 @@ jobs:
     container:
       image: skandigraun/yocto:latest
       volumes:
-        - yocto:/yocto
+        - yocto-builds:/yocto
     steps:
+      - name: Create Docker volume if it doesn't exist
+        run: docker volume create yocto-builds || true
       - run: |
          mkdir -p /yocto/${{ matrix.yocto_version }}
          cd /yocto/${{ matrix.yocto_version }}
@@ -58,6 +60,10 @@ jobs:
     if: ${{ github.repository_owner == 'brightsign' }}
     runs-on: [self-hosted, chromium]
     needs: build
+    container:
+      image: skandigraun/yocto:latest
+      volumes:
+        - yocto-builds:/yocto
     strategy:
       matrix:
         yocto_version: [kirkstone, scarthgap, walnascar, master]
