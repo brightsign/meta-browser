@@ -35,12 +35,11 @@ jobs:
     runs-on: [self-hosted, chromium]
     container:
       image: skandigraun/yocto:latest
-      volumes:
-        - yocto:/yocto
     steps:
-      - run: |
-         mkdir -p /yocto/${{ matrix.yocto_version }}
-         cd /yocto/${{ matrix.yocto_version }}
+      - name: Build Chromium
+        run: |
+         mkdir -p /home/yoctouser/yocto/${{ matrix.yocto_version }}
+         cd /home/yoctouser/yocto/${{ matrix.yocto_version }}
          rm -rf meta-browser meta-chromium-test
          if [ "${{ github.event_name }}" = "pull_request" ]; then
              GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
@@ -68,6 +67,7 @@ jobs:
           - yocto_version: kirkstone
             arch: riscv
     steps:
-      - run: |
-         cd /yocto/${{ matrix.yocto_version }}
+      - name: Test Chromium
+        run: |
+         cd /home/yoctouser/yocto/${{ matrix.yocto_version }}
          ./meta-chromium-test/scripts/test.sh ${{ matrix.yocto_version}} ${{ matrix.arch }} ${{ matrix.chromium_version }} ${{ matrix.libc_flavour}}
