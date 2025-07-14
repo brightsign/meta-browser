@@ -56,6 +56,7 @@ def find_chromium_licenses(chromium_root):
     license_files = set([os.path.join(chromium_root, "LICENSE")])
 
     for d in licenses.FindThirdPartyDirs(chromium_root):
+        print(d)
         if d in SKIPPED_DIRECTORIES:
             continue
 
@@ -71,6 +72,10 @@ def find_chromium_licenses(chromium_root):
             # just print them for now.
             e = "'" + "', '".join(error.strip() for error in errors) + "'"
             print("Exception(s) in directory %s: %s" % (d, e))
+
+            # Even if metadata parsing failed, try to find common license files
+            # in the directory to avoid missing important licenses
+            _try_find_common_license_files(d, chromium_root, license_files)
             continue
 
             # if input('Ignore (y)? ') == 'y':
@@ -86,20 +91,143 @@ def find_chromium_licenses(chromium_root):
     return license_files
 
 
-def print_license_list(chromium_root, output_file):
+def print_license_list(chromium_root, output_file, comprehensive=False):
     """Print a list of Chromium license paths and checksums in a format
     suitable for use in a Yocto recipe."""
     licenses = {}
-    for license_file in find_chromium_licenses(chromium_root):
+
+    if comprehensive:
+        print("Using comprehensive recursive search for license files...")
+        license_files = find_all_license_files_recursive(chromium_root)
+    else:
+        print("Using metadata-based search for license files...")
+        license_files = find_chromium_licenses(chromium_root)
+
+    for license_file in license_files:
         with open(license_file, "rb") as file_handle:
             license_hash = hashlib.md5(file_handle.read()).hexdigest()
         license_relpath = os.path.relpath(license_file, chromium_root)
         licenses[license_relpath] = license_hash
+
+    print(f"Found {len(licenses)} license files total.")
+
     with open(output_file, "w") as out:
         out.write('LIC_FILES_CHKSUM = "\\\n')
         for f in sorted(licenses):
             out.write("    file://${S}/%s;md5=%s \\\n" % (f, licenses[f]))
         out.write('    "\n')
+
+
+def _try_find_common_license_files(directory, chromium_root, license_files_set):
+    """Try to find common license file names in a directory when metadata parsing fails."""
+    common_license_names = [
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENSE.rst",
+        "COPYING",
+        "COPYING.txt",
+        "COPYING.md",
+        "NOTICE",
+        "NOTICE.txt",
+        "NOTICE.md",
+        "COPYRIGHT",
+        "COPYRIGHT.txt",
+        "COPYRIGHT.md",
+    ]
+
+    dir_path = os.path.join(chromium_root, directory)
+    if not os.path.exists(dir_path):
+        return
+
+    # Search current directory
+    for license_name in common_license_names:
+        license_path = os.path.join(dir_path, license_name)
+        if os.path.isfile(license_path):
+            print(
+                "  Found fallback license file: %s"
+                % os.path.join(directory, license_name)
+            )
+            license_files_set.add(license_path)
+
+    # Also search immediate subdirectories (one level deep) for license files
+    # This helps with directories like android_deps/autorolled/committed/libs/*/
+    try:
+        for item in os.listdir(dir_path):
+            item_path = os.path.join(dir_path, item)
+            if os.path.isdir(item_path):
+                for license_name in common_license_names:
+                    license_path = os.path.join(item_path, license_name)
+                    if os.path.isfile(license_path):
+                        rel_path = os.path.join(directory, item, license_name)
+                        print("  Found fallback license file: %s" % rel_path)
+                        license_files_set.add(license_path)
+
+                # Also check one more level for deeply nested structures
+                try:
+                    for subitem in os.listdir(item_path):
+                        subitem_path = os.path.join(item_path, subitem)
+                        if os.path.isdir(subitem_path):
+                            for license_name in common_license_names:
+                                license_path = os.path.join(subitem_path, license_name)
+                                if os.path.isfile(license_path):
+                                    rel_path = os.path.join(
+                                        directory, item, subitem, license_name
+                                    )
+                                    print(
+                                        "  Found fallback license file: %s" % rel_path
+                                    )
+                                    license_files_set.add(license_path)
+                except (OSError, PermissionError):
+                    pass
+    except (OSError, PermissionError):
+        pass
+
+
+def find_all_license_files_recursive(chromium_root):
+    """Find all license files by recursively searching the entire tree.
+    This is a more comprehensive but slower approach."""
+    common_license_names = [
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENSE.rst",
+        "COPYING",
+        "COPYING.txt",
+        "COPYING.md",
+        "NOTICE",
+        "NOTICE.txt",
+        "NOTICE.md",
+        "COPYRIGHT",
+        "COPYRIGHT.txt",
+        "COPYRIGHT.md",
+    ]
+
+    license_files = set()
+
+    # Start with the main LICENSE file
+    main_license = os.path.join(chromium_root, "LICENSE")
+    if os.path.isfile(main_license):
+        license_files.add(main_license)
+
+    # Walk through the entire chromium tree looking for license files
+    for root, dirs, files in os.walk(chromium_root):
+        # Skip some obviously non-relevant directories for performance
+        dirs[:] = [
+            d
+            for d in dirs
+            if not d.startswith(".")
+            and d not in ["__pycache__", "node_modules", ".git", ".svn"]
+        ]
+
+        for filename in files:
+            if filename in common_license_names:
+                license_path = os.path.join(root, filename)
+                license_files.add(license_path)
+                rel_path = os.path.relpath(license_path, chromium_root)
+                print("Found license file: %s" % rel_path)
+
+    return license_files
 
 
 if __name__ == "__main__":
@@ -112,6 +240,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "output_file", help="File to write the output to (it will be " "overwritten)"
     )
+    parser.add_argument(
+        "--comprehensive",
+        action="store_true",
+        help="Use comprehensive recursive search for all license files "
+        "(slower but finds more files)",
+    )
     args = parser.parse_args()
 
     tools_licenses_dir = os.path.join(args.chromium_root, "tools/licenses")
@@ -120,4 +254,4 @@ if __name__ == "__main__":
         sys.exit(1)
     sys.path = [tools_licenses_dir] + sys.path
 
-    print_license_list(args.chromium_root, args.output_file)
+    print_license_list(args.chromium_root, args.output_file, args.comprehensive)
