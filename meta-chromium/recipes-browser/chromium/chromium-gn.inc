@@ -25,12 +25,9 @@ SRC_URI += "\
     file://0008-Use-the-correct-path-to-libclang_rt.builtins.a.patch \
     file://0009-Adjust-the-Rust-build-to-our-needs.patch \
     file://0010-Don-t-require-profiler_builtins.rlib.patch \
-    file://0011-PATCH-Fix-bindgen-sysroot-detection-for-Yocto-builds.patch \
+    file://0011-Fix-bindgen-sysroot-detection-for-Yocto-builds.patch \
     file://0012-fix-check_version-Only-compare-node.js-major-version.patch \
     file://0013-Disable-hardcoded-target-flags-for-cross-compilation.patch \
-    file://0014-run_bindgen-simpler.patch \
-    file://0015-cross-compile-detection.patch \
-    file://0016-cross-compile-detection.patch \
 "
 
 # ARM/AArch64-specific patches.
