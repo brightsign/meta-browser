@@ -5,18 +5,22 @@ and/or Yocto.
 
 This layer depends on:
 
-* URI: git://git.openembedded.org/openembedded-core
-  - branch: master
-  - revision: HEAD
+* URI: git://git.yoctoproject.org/poky
+  - branch: scarthgap
+  - revision: ac257900c33754957b2696529682029d997a8f28
 
 * URI: git://git.openembedded.org/meta-openembedded
   - layers: meta-oe
-  - branch: master
-  - revision: HEAD
+  - branch: scarthgap
+  - revision: 491671faee11ea131feab5a3a451d1a01deb2ab1
 
 * URI: git://github.com/kraj/meta-clang
-  - branch: master
-  - revision: HEAD
+  - branch: scarthgap-clang20
+  - revision: 76596813cd0061bd9818a80926e6900af61fcaa0
+
+* URI: git://git.yoctoproject.org/meta-lts-mixins
+  - branch: scarthgap/rust
+  - revision: 96deb45139df027473faf0938fe006d33c45c375
 
 ## Contributing
 
@@ -121,11 +125,6 @@ recipes to build correctly.
 This is particularly a problem for the toolchain (i.e. LLVM/clang and Rust).
 Chromium needs a more recent version of Rust than OE Core provides for
 scarthgap, which is why we depend on meta-lts-mixins' `scarthgap/rust` branch.
-
-**Side note: For now, clang 18 provided by meta-clang is recent enough, but at
-some point during scarthgap's LTS lifetime Chromium won't be compilable with
-that version, and we'll have to create e.g. a scarthgap-clang20 branch for
-meta-clang and use that.**
 
 ## PACKAGECONFIG knobs
 
