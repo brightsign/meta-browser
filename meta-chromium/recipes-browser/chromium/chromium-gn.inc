@@ -282,6 +282,9 @@ GN_ARGS += ' \
 BUILD_CPPFLAGS:append:runtime-llvm = " -isysroot=${STAGING_DIR_NATIVE} -stdlib=libc++"
 # Use libgcc for native parts
 BUILD_LDFLAGS:append:runtime-llvm = " -rtlib=libgcc -unwindlib=libgcc -stdlib=libc++ -lc++abi -rpath ${STAGING_LIBDIR_NATIVE}"
+LDFLAGS:append:runtime-llvm = " --target=${TARGET_SYS}"
+CXXFLAGS:append:runtime-llvm = " --target=${TARGET_SYS} -nostdlib++"
+CFLAGS:append:runtime-llvm = " --target=${TARGET_SYS}"
 
 # Toolchains we will use for the build. We need to point to the toolchain file
 # we've created, set the right target architecture and make sure we are not
