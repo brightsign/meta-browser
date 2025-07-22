@@ -1,7 +1,7 @@
 From d5d34b719189ca2c3318e6636bf55197962e500c Mon Sep 17 00:00:00 2001
 From: Raphael Kubo da Costa <kubo@igalia.com>
 Date: Tue, 7 Nov 2017 15:24:32 +0100
-Subject: [PATCH 02/13] v8: qemu wrapper
+Subject: [PATCH 02/11] v8: qemu wrapper
 
 The patch below makes the V8 binaries run during the build be invoked through
 QEMU, as they are built for the target.

@@ -1,7 +1,7 @@
-From ed89311009aae78c9ae226edadc7b8f451d9ab8e Mon Sep 17 00:00:00 2001
+From 6d8f717cb23cc00c25182d5377ffebc9028761d3 Mon Sep 17 00:00:00 2001
 From: Max Ihlenfeldt <max@igalia.com>
 Date: Wed, 7 Feb 2024 11:58:30 +0000
-Subject: [PATCH 10/13] Don't require profiler_builtins.rlib
+Subject: [PATCH 10/11] Don't require profiler_builtins.rlib
 
 This library is only needed for profiling builds, which we don't do.
 Including it leads to compile errors on with OE's current master branch

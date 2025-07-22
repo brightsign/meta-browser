@@ -1,7 +1,7 @@
-From 519a6e5417243065cca745936424b489128bd92e Mon Sep 17 00:00:00 2001
+From 8dec7cef6d2e041b363371f611156b473a8aca95 Mon Sep 17 00:00:00 2001
 From: Caner Altinbasak <cal@brightsign.biz>
 Date: Wed, 2 Jul 2025 15:46:35 +0100
-Subject: [PATCH 12/13] fix(check_version):Only compare node.js major version
+Subject: [PATCH 11/11] fix(check_version):Only compare node.js major version
  number
 
 Yocto has a slightly newer version of node.js available. Compare only

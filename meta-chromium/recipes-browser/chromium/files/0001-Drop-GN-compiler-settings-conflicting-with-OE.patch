@@ -1,7 +1,7 @@
 From 69bdbc33f4e6f2882f6ac8fb6bae883577887239 Mon Sep 17 00:00:00 2001
 From: Max Ihlenfeldt <max@igalia.com>
 Date: Tue, 25 Jun 2024 11:06:19 +0000
-Subject: [PATCH 01/13] Drop GN compiler settings conflicting with OE
+Subject: [PATCH 01/11] Drop GN compiler settings conflicting with OE
 
 The clang cross compiler built with meta-clang has lots of these
 settings built-in and specifying them with GN confuses the compiler:

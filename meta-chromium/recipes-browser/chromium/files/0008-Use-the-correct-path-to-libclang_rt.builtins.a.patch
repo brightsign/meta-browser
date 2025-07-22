@@ -1,7 +1,7 @@
 From 22bb04cf2c85e78024a59cc0846026d9ecab8237 Mon Sep 17 00:00:00 2001
 From: Max Ihlenfeldt <max@igalia.com>
 Date: Tue, 19 Dec 2023 12:14:05 +0000
-Subject: [PATCH 08/13] Use the correct path to libclang_rt.builtins.a
+Subject: [PATCH 08/11] Use the correct path to libclang_rt.builtins.a
 
 Chromium needs to link against libclang_rt.builtins.a, but it expects
 it in a slightly different directory than where it actually is in our

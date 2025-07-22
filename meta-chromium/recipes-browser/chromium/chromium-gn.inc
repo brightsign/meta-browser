@@ -26,7 +26,6 @@ SRC_URI += "\
     file://0009-Adjust-the-Rust-build-to-our-needs.patch \
     file://0010-Don-t-require-profiler_builtins.rlib.patch \
     file://0011-fix-check_version-Only-compare-node.js-major-version.patch \
-    file://0012-debug.patch \
 "
 
 # ARM/AArch64-specific patches.
@@ -122,16 +121,10 @@ PACKAGECONFIG[use-egl] = ",,virtual/egl virtual/libgles2"
 # be necessary but are OK to add).
 PACKAGECONFIG[component-build] = ""
 
-# Starting with M61, Chromium defaults to building with its own copy of libc++
-# instead of the system's libstdc++. As of Chromium 138, libc++ is required unconditionally.
-# https://groups.google.com/a/chromium.org/d/msg/chromium-packagers/8aYO3me2SCE/SZ8pJXhZAwAJ
+#  As of Chromium 138, libc++ is required unconditionally.
+# https://docs.google.com/document/d/193ig0qeM23rK1yH6bW14O3zIgVztyKaY4R1XRwgmUFk/edit?usp=sharing
 # Force use_custom_libcxx=true as Chromium 138+ requires libc++
 GN_ARGS += "use_custom_libcxx=true"
-
-# Ensure PartitionAlloc is enabled for ARM builds to provide allocator implementations for Rust
-# Without this, the Rust allocator fails to link due to missing rust_allocator_internal symbols
-# Also enable backup ref ptr support which is required for PartitionAlloc
-GN_ARGS:append:arm = " use_partition_alloc_as_malloc=true enable_backup_ref_ptr_support=true"
 
 PACKAGECONFIG[cups] = "use_cups=true,use_cups=false,cups"
 PACKAGECONFIG[gtk4] = ""
@@ -285,31 +278,10 @@ GN_ARGS += ' \
         google_default_client_secret="${GOOGLE_DEFAULT_CLIENT_SECRET}" \
 '
 
-# Chromium 138+ requires libc++ unconditionally for security and Rust interop.
-# Instead of trying to provide external libc++/libgcc, let Chromium use its bundled libc++.
-# This avoids complex cross-compilation runtime library issues and aligns with upstream requirements.
 # Use libcxx headers for native parts
 BUILD_CPPFLAGS:append:runtime-llvm = " -isysroot=${STAGING_DIR_NATIVE} -stdlib=libc++"
 # Use libgcc for native parts
 BUILD_LDFLAGS:append:runtime-llvm = " -rtlib=libgcc -unwindlib=libgcc -stdlib=libc++ -lc++abi -rpath ${STAGING_LIBDIR_NATIVE}"
-# For target builds: Let Chromium handle its own libc++ and runtime libraries
-# Chromium 138+ uses bundled libc++ and compiler-rt, so don't force external runtime libs
-# Just set the target triple and let Chromium's build system handle runtime libraries
-LDFLAGS:append:runtime-llvm = " --target=${TARGET_SYS}"
-# Also ensure C++ flags are consistent - let Chromium use its bundled libc++
-# Don't use system libstdc++ - Chromium will use its own bundled libc++
-CXXFLAGS:append:runtime-llvm = " --target=${TARGET_SYS} -nostdlib++"
-# Ensure C flags are also consistent with target triple
-CFLAGS:append:runtime-llvm = " --target=${TARGET_SYS}"
-
-# Set environment variables for bindgen to configure Yocto cross-compilation
-export BINDGEN_TARGET_SYSROOT = "${STAGING_DIR_TARGET}"
-export BINDGEN_NATIVE_SYSROOT = "${STAGING_DIR_NATIVE}"
-export BINDGEN_TARGET_ARCH = "${TARGET_ARCH}"
-export BINDGEN_TARGET_VENDOR = "${TARGET_VENDOR}"
-export BINDGEN_TARGET_OS = "${TARGET_OS}"
-export BINDGEN_BUILD_ARCH = "${BUILD_ARCH}"
-export BINDGEN_RUST_TARGET_SYS = "${RUST_TARGET_SYS}"
 
 # Toolchains we will use for the build. We need to point to the toolchain file
 # we've created, set the right target architecture and make sure we are not
@@ -377,17 +349,15 @@ ARM_VERSION:armv6 = "6"
 # overriding what GN wants
 TUNE_CCARGS:remove = "-mthumb"
 
+# Linking rust with partitionalloc is problematic in arm32
 GN_ARGS:append:arm = ' \
         arm_float_abi="${ARM_FLOAT_ABI}" \
         arm_fpu="${ARM_FPU}" \
         arm_tune="${ARM_TUNE}" \
         arm_version=${ARM_VERSION} \
+        use_partition_alloc_as_malloc=false \
+        enable_backup_ref_ptr_support=false \
 '
-# tcmalloc's atomicops-internals-arm-v6plus.h uses the "dmb" instruction that
-# is not available on (some?) ARMv6 models, which causes the build to fail.
-GN_ARGS:append:armv6 = ' use_partition_alloc_as_malloc=false enable_backup_ref_ptr_support=false'
-GN_ARGS:append:armv7a = ' use_partition_alloc_as_malloc=false enable_backup_ref_ptr_support=false'
-GN_ARGS:append:armv7ve = ' use_partition_alloc_as_malloc=false enable_backup_ref_ptr_support=false'
 
 # The WebRTC code fails to build on ARMv6 when NEON is enabled.
 # https://bugs.chromium.org/p/webrtc/issues/detail?id=6574
@@ -537,21 +507,10 @@ do_configure() {
 	cd ${S}
 	python3 ./build/linux/unbundle/replace_gn_files.py --system-libraries ${GN_UNBUNDLE_LIBS}
 
-	# Add Yocto-specific Rust target triples before running gn gen
-	# Use Yocto's rust-common.bbclass logic to convert to proper Rust triples
-	echo "DEBUG: RUST_TARGET_SYS=${RUST_TARGET_SYS}"
-	echo "DEBUG: RUST_HOST_SYS=${RUST_HOST_SYS}"
-	echo "DEBUG: RUST_BUILD_SYS=${RUST_BUILD_SYS}"
-	echo "DEBUG: Contents of known-target-triples.txt before modification:"
-	cat ${S}/build/rust/known-target-triples.txt
-
 	# Add Rust-style target triples (converted by Yocto's rust-common.bbclass)
 	grep -qxF "${RUST_TARGET_SYS}" ${S}/build/rust/known-target-triples.txt || echo "${RUST_TARGET_SYS}" >> ${S}/build/rust/known-target-triples.txt
 	grep -qxF "${RUST_HOST_SYS}" ${S}/build/rust/known-target-triples.txt || echo "${RUST_HOST_SYS}" >> ${S}/build/rust/known-target-triples.txt
 	grep -qxF "${RUST_BUILD_SYS}" ${S}/build/rust/known-target-triples.txt || echo "${RUST_BUILD_SYS}" >> ${S}/build/rust/known-target-triples.txt
-
-	echo "DEBUG: Contents of known-target-triples.txt after modification:"
-	cat ${S}/build/rust/known-target-triples.txt
 
 	gn gen --args='${GN_ARGS}' "${OUTPUT_DIR}"
 }

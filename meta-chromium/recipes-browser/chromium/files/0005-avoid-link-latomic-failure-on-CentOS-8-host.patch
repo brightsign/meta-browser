@@ -1,7 +1,7 @@
 From 9eb5a6ed9a73d7fab673f049ea7e5b9c4218434c Mon Sep 17 00:00:00 2001
 From: Hongxu Jia <hongxu.jia@windriver.com>
 Date: Fri, 22 Jan 2021 00:02:25 +0800
-Subject: [PATCH 05/13] avoid link latomic failure on CentOS 8 host
+Subject: [PATCH 05/11] avoid link latomic failure on CentOS 8 host
 
 When host (such as CentOS 8) did not install libatomic, there was a
 link failure on native. In fact, only target requires to link atomic,

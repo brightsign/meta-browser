@@ -1,7 +1,7 @@
 From 5b09c349a19ed28bbadba3061ca16d5aabb044e5 Mon Sep 17 00:00:00 2001
 From: Raphael Kubo da Costa <kubo@igalia.com>
 Date: Wed, 8 Nov 2017 16:43:47 +0100
-Subject: [PATCH 03/13] wrapper: extra flags
+Subject: [PATCH 03/11] wrapper: extra flags
 
 The patch below is used to allow running Chromium as root as well as passing
 extra flags to it by default.

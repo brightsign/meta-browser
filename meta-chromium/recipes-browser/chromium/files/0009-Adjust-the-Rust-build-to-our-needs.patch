@@ -1,7 +1,7 @@
-From 3b4e33243cacee4ad00f0e2ac62da7eda6831844 Mon Sep 17 00:00:00 2001
+From 8a8e2590d1c05348ed6f3155cf4038a8c7a6ba48 Mon Sep 17 00:00:00 2001
 From: Max Ihlenfeldt <max@igalia.com>
 Date: Tue, 16 Jan 2024 12:29:30 +0000
-Subject: [PATCH 09/13] Adjust the Rust build to our needs
+Subject: [PATCH 09/11] Adjust the Rust build to our needs
 
 1. Set `RUSTC_BOOTSTRAP=1` environment variable when calling rustc, to
    avoid the need of a nightly Rust toolchain.
@@ -12,18 +12,22 @@ Subject: [PATCH 09/13] Adjust the Rust build to our needs
    part for the Rust "target triple", but Chromium assumes the vendor to
    always be "-unknown". This new arg lets us override the default when
    building target code.
+4. Use host rust compiler when with host_system_allocator_toolchain
+5. Remove arm32 bit specific clang flags from rust compiler invocation
 
 Upstream-Status: Inappropriate [specific to our build setup]
+Co-authored-by: Caner Altinbasak <cal@brightsign.biz>
 Signed-off-by: Max Ihlenfeldt <max@igalia.com>
 ---
- build/config/rust.gni            | 26 +++++++++++++++++++-------
+ build/config/rust.gni            | 28 ++++++++++++++++++----------
+ build/rust/filter_clang_args.py  |  5 +++++
  build/rust/rustc_wrapper.py      |  1 +
  build/rust/std/BUILD.gn          | 28 +++++++++++++++++++++-------
  build/rust/std/find_std_rlibs.py | 16 +++++++++++-----
- 4 files changed, 52 insertions(+), 19 deletions(-)
+ 5 files changed, 56 insertions(+), 22 deletions(-)
 
 diff --git a/build/config/rust.gni b/build/config/rust.gni
-index bd18d13119..d13b6e7b4b 100644
+index bd18d13119..e260576fba 100644
 --- a/build/config/rust.gni
 +++ b/build/config/rust.gni
 @@ -95,6 +95,11 @@ declare_args() {
@@ -44,7 +48,7 @@ index bd18d13119..d13b6e7b4b 100644
  if (is_linux || is_chromeos) {
 +  vendor = "-unknown"
 +
-+  is_host = current_toolchain == host_toolchain || toolchain_for_rust_host_build_tools
++  is_host = current_toolchain == host_toolchain || current_toolchain == host_system_allocator_toolchain || toolchain_for_rust_host_build_tools
 +  if (!is_host && rust_target_triple_vendor_for_target != "") {
 +    vendor = rust_target_triple_vendor_for_target
 +  }
@@ -63,19 +67,19 @@ index bd18d13119..d13b6e7b4b 100644
      cargo_target_abi = ""
    } else if (current_cpu == "arm") {
      if (arm_float_abi == "hard") {
-@@ -214,9 +226,9 @@ if (is_linux || is_chromeos) {
+@@ -213,18 +225,14 @@ if (is_linux || is_chromeos) {
+       # The thumbv7 vs. armv7 distinction is for legacy reasons and both
        # targets in fact target Thumb, see:
        # https://github.com/rust-lang/rust/issues/44722
-       if (arm_use_neon) {
+-      if (arm_use_neon) {
 -        rust_abi_target = "thumbv7neon-unknown-linux-gnueabi" + float_suffix
-+        rust_abi_target = "thumbv7neon" + vendor + "-linux-gnueabi" + float_suffix
-       } else {
+-      } else {
 -        rust_abi_target = "armv7-unknown-linux-gnueabi" + float_suffix
-+        rust_abi_target = "armv7" + vendor + "-linux-gnueabi" + float_suffix
-       }
+-      }
++      rust_abi_target = "armv7" + vendor + "-linux-gnueabi" + float_suffix
        cargo_target_abi = "eabi" + float_suffix
      } else {
-@@ -224,7 +236,7 @@ if (is_linux || is_chromeos) {
+       rust_abi_target = "arm-unknown-linux-gnueabi" + float_suffix
        cargo_target_abi = "eabi" + float_suffix
      }
    } else if (current_cpu == "riscv64") {
@@ -84,7 +88,7 @@ index bd18d13119..d13b6e7b4b 100644
      cargo_target_abi = ""
    } else if (current_cpu == "ppc64") {
      rust_abi_target = "powerpc64le-unknown-linux-gnu"
-@@ -237,7 +249,7 @@ if (is_linux || is_chromeos) {
+@@ -237,7 +245,7 @@ if (is_linux || is_chromeos) {
      cargo_target_abi = ""
    } else {
      # Best guess for other future platforms.
@@ -93,6 +97,22 @@ index bd18d13119..d13b6e7b4b 100644
      cargo_target_abi = ""
    }
  } else if (is_android) {
+diff --git a/build/rust/filter_clang_args.py b/build/rust/filter_clang_args.py
+index 5a1843c0df..7fb4b49516 100644
+--- a/build/rust/filter_clang_args.py
++++ b/build/rust/filter_clang_args.py
+@@ -24,6 +24,11 @@ def filter_clang_args(clangargs):
+           pass
+         elif args[i].startswith('-plugin-arg'):
+           i += 2
++      # Filter out ARM-specific flags that aren't supported on other architectures
++      elif args[i].startswith('-mbranch-protection'):
++        pass  # Skip this argument
++      elif args[i].startswith('-mfpu='):
++        pass
+       else:
+         yield args[i]
+       i += 1
 diff --git a/build/rust/rustc_wrapper.py b/build/rust/rustc_wrapper.py
 index 8f2096dfe5..de43d44eed 100755
 --- a/build/rust/rustc_wrapper.py

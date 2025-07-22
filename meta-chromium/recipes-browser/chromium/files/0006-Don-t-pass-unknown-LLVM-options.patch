@@ -1,7 +1,7 @@
 From 9a75e4248e3099a26ddcdfb0efc42cf82b4ec131 Mon Sep 17 00:00:00 2001
 From: Max Ihlenfeldt <max@igalia.com>
 Date: Fri, 8 Dec 2023 11:47:43 +0000
-Subject: [PATCH 06/13] Don't pass unknown LLVM options
+Subject: [PATCH 06/11] Don't pass unknown LLVM options
 
 Because we compile and link with an older LLVM version than upstream, we
 need to drop the following LLVM options that aren't available yet:

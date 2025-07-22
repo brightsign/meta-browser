@@ -1,7 +1,7 @@
 From 5d022ee1f84195bafcc6436a6e1f9b6f00e986cc Mon Sep 17 00:00:00 2001
 From: Khem Raj <raj.khem@gmail.com>
 Date: Wed, 4 Dec 2019 19:06:54 -0800
-Subject: [PATCH 04/13] Delete compiler options not available in release
+Subject: [PATCH 04/11] Delete compiler options not available in release
  versions of clang _yet_
 
 * CREL feature is not supported on the current clang toolchain version,

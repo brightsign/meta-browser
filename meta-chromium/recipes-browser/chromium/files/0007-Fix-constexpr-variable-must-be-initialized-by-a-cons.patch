@@ -1,7 +1,7 @@
 From feb7f0598505fa6240a84ef8441c8c47d8e7b8f2 Mon Sep 17 00:00:00 2001
 From: Max Ihlenfeldt <max@igalia.com>
 Date: Fri, 22 Mar 2024 10:43:47 +0000
-Subject: [PATCH 07/13] Fix "constexpr variable must be initialized by a
+Subject: [PATCH 07/11] Fix "constexpr variable must be initialized by a
  constant expression"
 
 clang 17 still has some problems with constexpr strings. We need to
