@@ -39,4 +39,5 @@ SRC_URI += "\
 "
 
 # ARM/AArch64-specific patches.
-SRC_URI:append:aarch64 = "${@bb.utils.contains('TUNE_FEATURES', 'crypto', '', ' file://arm/0001-Fix-AES-crypto-SIGILL-on-rpi4-64.patch', d)}"
+# Note: 0001-Fix-AES-crypto-SIGILL-on-rpi4-64.patch is already included in Electron source
+# SRC_URI:append:aarch64 = "${@bb.utils.contains('TUNE_FEATURES', 'crypto', '', ' file://arm/0001-Fix-AES-crypto-SIGILL-on-rpi4-64.patch', d)}"
