@@ -31,7 +31,7 @@ jobs:
     strategy:
       matrix:
         yocto_version: [master]
-        browser_version: [ozone-wayland]
+        browser_version: [ozone-wayland, ozone-x11]
         browser: [electron]
         libc_flavour: [glibc]
         arch: [arm, aarch64, x86-64]
