@@ -1,17 +1,30 @@
-From 1fe03c3e5f346865c4b1a5ca4fc5b3b0c64d6793 Mon Sep 17 00:00:00 2001
+From e1d41130d98f66b0a48e07bf8d76737caee3d65b Mon Sep 17 00:00:00 2001
 From: Caner Altinbasak <cal@brightsign.biz>
 Date: Tue, 29 Jul 2025 17:21:47 +0100
 Subject: [PATCH] fix: Electron yocto build problems
 
 Upstream-Status: Inappropriate
 ---
+ content/zygote/zygote_linux.cc                |  1 +
  electron/shell/browser/native_window_views.cc | 24 ++++++++++---------
  electron/shell/browser/native_window_views.h  |  4 ++--
  .../browser/osr/osr_host_display_client.cc    |  2 +-
  .../browser/osr/osr_host_display_client.h     |  2 +-
  electron/shell/browser/ui/gtk/menu_util.cc    |  7 ++++++
- 5 files changed, 24 insertions(+), 15 deletions(-)
+ 6 files changed, 25 insertions(+), 15 deletions(-)
 
+diff --git a/content/zygote/zygote_linux.cc b/content/zygote/zygote_linux.cc
+index 003169cf7d..07a5f855b1 100644
+--- a/content/zygote/zygote_linux.cc
++++ b/content/zygote/zygote_linux.cc
+@@ -13,6 +13,7 @@
+ #include <sys/socket.h>
+ #include <sys/types.h>
+ #include <sys/wait.h>
++#include <sys/prctl.h>
+ #include <grp.h>
+ 
+ #include <tuple>
 diff --git a/electron/shell/browser/native_window_views.cc b/electron/shell/browser/native_window_views.cc
 index 3b18f05042..25cdaa4027 100644
 --- a/electron/shell/browser/native_window_views.cc
