@@ -345,7 +345,7 @@ jobs:
           fi
           
           # Run the build script
-          ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} $BROWSER_VERSION $BUILD_TYPE ${{ inputs.libc_flavour }}
+          ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} $BROWSER_VERSION ${{ inputs.libc_flavour }}
 
       # Upload build artifacts to S3 (if successful)
       - name: Upload artifacts
