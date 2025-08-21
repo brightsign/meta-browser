@@ -273,14 +273,9 @@ jobs:
           git clone $GH_URL
           git -C meta-browser checkout $GH_REV
           
-          # Clone the test repo (use electron-master branch for electron builds)
-          if [[ "${{ inputs.chromium_version }}" == *"ozone-x11"* ]]; then
-            echo "Cloning meta-chromium-test electron-master branch for electron build"
-            git clone -b electron-master https://github.com/brightsign/meta-chromium-test.git
-          else
-            echo "Cloning meta-chromium-test main branch for chromium build" 
-            git clone -b main https://github.com/brightsign/meta-chromium-test.git
-          fi
+          # Clone the test repo (use electron-master branch for all builds)
+          echo "Cloning meta-chromium-test electron-master branch"
+          git clone -b electron-master https://github.com/brightsign/meta-chromium-test.git
 
       # Run the build
       - name: Build Browser
@@ -305,6 +300,12 @@ jobs:
           # Copy the repositories from our working directory
           cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-browser ./
           cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-chromium-test ./
+          
+          # Generate KAS configuration files (required for build)
+          echo "Generating KAS configuration files..."
+          cd meta-chromium-test
+          ./scripts/generate_kas_files.sh
+          cd ..
           
           # Set environment variables for caching (EFS mounts only)
           export SSTATE_DIR=/mnt/shared-cache/sstate-cache
