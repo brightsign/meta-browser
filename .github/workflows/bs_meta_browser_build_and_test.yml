@@ -3,31 +3,7 @@ on:
   workflow_call:
     inputs:
       runner_name:
-        de          # Mount shared cache EFS (sstate, downloads) with retries
-          SHARED_CACHE_MOUNTED=false
-          for i in {1..3}; do
-            echo "Attempt $i: Mounting shared cache EFS..."
-            if sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 
-              ${{ env.SHARED_CACHE_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/shared-cache; then
-              echo "Shared cache EFS mounted successfully"
-              SHARED_CACHE_MOUNTED=true
-              break
-            fi
-            echo "Mount attempt $i failed, trying with IP address..."
-            # Get mount target IP for this subnet
-            MOUNT_TARGET_IP=$(aws efs describe-mount-targets --file-system-id ${{ env.SHARED_CACHE_EFS_ID }} --region ${{ env.AWS_REGION }} --query 'MountTargets[?SubnetId==`${{ env.VPC_SUBNET_ID }}`].IpAddress' --output text)
-            if [ -n "$MOUNT_TARGET_IP" ] && [ "$MOUNT_TARGET_IP" != "None" ]; then
-              echo "Trying to mount using IP address: $MOUNT_TARGET_IP"
-              if sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 
-                $MOUNT_TARGET_IP:/ /mnt/shared-cache; then
-                echo "Shared cache EFS mounted successfully using IP"
-                SHARED_CACHE_MOUNTED=true
-                break
-              fi
-            fi
-            echo "Mount attempt $i failed, retrying in 10 seconds..."
-            sleep 10
-          doneRunner name'
+        description: 'Runner name'
         required: true
         type: string
 
@@ -112,6 +88,9 @@ jobs:
           locale --all-locales | grep en_US.utf8 || true
           echo "en_US.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen
           sudo locale-gen
+          
+          # Install kas (Yocto build tool)
+          python3 -m pip install --user kas
           export LANG=en_US.UTF-8
           export LC_ALL=en_US.UTF-8
           
@@ -143,20 +122,24 @@ jobs:
           curl -s --connect-timeout 10 https://s3.amazonaws.com && echo "S3 reachable" || echo "S3 not reachable"
           
           # Alternative: Use mount target IP if DNS fails
-          echo "=== EFS Mount Strategy ==="
-          # Get mount target IPs through AWS CLI
+          echo "=== Alternative EFS Mount Strategy ==="
+          # Try to resolve mount target IPs through AWS CLI if available
           if command -v aws &> /dev/null; then
-            echo "Getting EFS mount targets..."
-            SHARED_CACHE_IP=$(aws efs describe-mount-targets --file-system-id ${{ env.SHARED_CACHE_EFS_ID }} --region ${{ env.AWS_REGION }} --query 'MountTargets[0].IpAddress' --output text 2>/dev/null || echo "")
-            GIT_MIRROR_IP=$(aws efs describe-mount-targets --file-system-id ${{ env.GIT_MIRROR_EFS_ID }} --region ${{ env.AWS_REGION }} --query 'MountTargets[0].IpAddress' --output text 2>/dev/null || echo "")
-            echo "Shared cache EFS IP: $SHARED_CACHE_IP"
-            echo "Git mirror EFS IP: $GIT_MIRROR_IP"
+            echo "Attempting to get EFS mount targets..."
+            aws efs describe-mount-targets --file-system-id ${{ env.SHARED_CACHE_EFS_ID }} --region ${{ env.AWS_REGION }} || echo "AWS CLI describe failed"
           fi
           
+          # Try using regional EFS mount target instead
           echo "=== Mounting EFS file systems ==="
           echo "Shared cache EFS: ${{ env.SHARED_CACHE_EFS_ID }}"
           echo "Git mirror EFS: ${{ env.GIT_MIRROR_EFS_ID }}"
           echo "AWS Region: ${{ env.AWS_REGION }}"
+          
+          # Get EFS mount target IPs for fallback
+          SHARED_CACHE_IP=$(aws efs describe-mount-targets --file-system-id ${{ env.SHARED_CACHE_EFS_ID }} --region ${{ env.AWS_REGION }} --query 'MountTargets[0].IpAddress' --output text 2>/dev/null || echo "")
+          GIT_MIRROR_IP=$(aws efs describe-mount-targets --file-system-id ${{ env.GIT_MIRROR_EFS_ID }} --region ${{ env.AWS_REGION }} --query 'MountTargets[0].IpAddress' --output text 2>/dev/null || echo "")
+          echo "Shared cache EFS IP: $SHARED_CACHE_IP"
+          echo "Git mirror EFS IP: $GIT_MIRROR_IP"
           
           # Mount shared cache EFS (sstate, downloads) with DNS and IP fallback
           SHARED_MOUNTED=false
@@ -181,7 +164,7 @@ jobs:
             sleep 5
           done
           
-          # Mount git mirror EFS with DNS and IP fallback
+          # Mount git mirror EFS with DNS and IP fallback  
           GIT_MOUNTED=false
           for i in {1..2}; do
             echo "Attempt $i: Mounting git mirror EFS..."
@@ -255,6 +238,13 @@ jobs:
           # Create symlinks in /yocto to allow the build script to work
           ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
           ln -sf /mnt/shared-cache/downloads /yocto/yocto_dl
+          
+          # Create other directories that the build script expects
+          sudo mkdir -p /yocto/yocto_ccache /yocto/test-images
+          sudo chown -R ubuntu:ubuntu /yocto/yocto_ccache /yocto/test-images
+          
+          # Ensure kas is in PATH for the build
+          echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
           
           # Create other directories that the build script expects with proper permissions
           sudo mkdir -p /yocto/yocto_ccache /yocto/test-images
