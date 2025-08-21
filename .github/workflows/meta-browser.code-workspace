@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../sources/chromium-138.0.7204.35"
+		},
+		{
+			"path": "../../../meta"
+		}
+	],
+	"settings": {}
+}
