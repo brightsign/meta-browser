@@ -45,6 +45,7 @@ jobs:
     secrets: inherit
     with:
       build_type: "release"
+      browser: "electron"
       yocto_version: ${{ matrix.yocto_version }}
       chromium_version: ${{ matrix.chromium_version }}
       libc_flavour: ${{ matrix.libc_flavour }}

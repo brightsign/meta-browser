@@ -13,6 +13,11 @@ on:
         type: boolean
         default: false
 
+      browser:
+        description: "Electron or Chromium"
+        required: true
+        type: string
+
       build_type:
         description: 'Build Type'
         required: true
@@ -301,32 +306,11 @@ jobs:
           cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-browser ./
           cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-chromium-test ./
           
-          # Generate KAS configuration files (required for build)
-          echo "Generating KAS configuration files..."
-          cd meta-chromium-test
-          ./scripts/generate_kas_files.sh
-          cd ..
-          
           # Set environment variables for caching (EFS mounts only)
           export SSTATE_DIR=/mnt/shared-cache/sstate-cache
           export DL_DIR=/mnt/shared-cache/downloads
-          
-          # Determine build type based on chromium_version parameter
-          if [[ "${{ inputs.chromium_version }}" == *"ozone-wayland"* ]]; then
-            BUILD_TYPE="chromium"
-            BROWSER_VERSION="ozone-wayland"
-          elif [[ "${{ inputs.chromium_version }}" == *"ozone-x11"* ]]; then
-            BUILD_TYPE="electron"
-            BROWSER_VERSION="ozone-x11"
-          elif [[ "${{ inputs.chromium_version }}" == *"x11"* ]]; then
-            BUILD_TYPE="chromium"
-            BROWSER_VERSION="x11"
-          else
-            BUILD_TYPE="chromium"
-            BROWSER_VERSION="${{ inputs.chromium_version }}"
-          fi
-          
-          echo "Building $BUILD_TYPE with version $BROWSER_VERSION"
+                    
+          echo "Building ${{ inputs.browser }} with ${{ inputs.chromium_version }}"
           echo "Current directory: $(pwd)"
           echo "Directory contents: $(ls -la)"
           echo "Yocto directories:"
@@ -346,7 +330,7 @@ jobs:
           fi
           
           # Run the build script
-          ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} $BROWSER_VERSION ${{ inputs.libc_flavour }}
+          ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} ${{ inputs.chromium_version }} ${{ inputs.browser }} ${{ inputs.libc_flavour }}
 
       # Upload build artifacts to S3 (if successful)
       - name: Upload artifacts
@@ -358,13 +342,8 @@ jobs:
           DEPLOY_DIR=$(find build -name "deploy" -type d | head -1)
           if [ -n "$DEPLOY_DIR" ] && [ -d "$DEPLOY_DIR" ]; then
             echo "Uploading artifacts from $DEPLOY_DIR"
-            # Determine build type for artifact path
-            if [[ "${{ inputs.chromium_version }}" == *"ozone-x11"* ]]; then
-              BUILD_TYPE="electron"
-            else
-              BUILD_TYPE="chromium"
-            fi
-            aws s3 sync $DEPLOY_DIR/ s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${BUILD_TYPE}/${{ inputs.chromium_version }}/${{ github.run_id }}/ --quiet
+            # Use chromium_version for artifact path
+            aws s3 sync $DEPLOY_DIR/ s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${{ inputs.chromium_version }}/${{ github.run_id }}/ --quiet
           else
             echo "No deploy directory found"
             echo "Available directories:"
