@@ -1,0 +1,190 @@
+name: 'BrightSign Build and Test Meta-Browser: Build and test workflow'
+on:
+  workflow_call:
+    inputs:
+      runner_name:
+        description: 'Runner name'
+        required: true
+        type: string
+
+      github_hosted_runner:
+        description: 'Whether to use GitHub-hosted runner'
+        required: false
+        type: boolean
+        default: false
+
+      build_type:
+        description: 'Build Type'
+        required: true
+        type: string
+
+      yocto_version:
+        description: 'Yocto version'
+        required: true
+        type: string
+
+      chromium_version:
+        description: 'Chromium version (ozone-wayland or x11)'
+        required: true
+        type: string
+
+      libc_flavour:
+        description: 'libc flavour'
+        required: true
+        type: string
+
+      arch:
+        description: 'Architecture'
+        required: true
+        type: string
+
+      aws_arn_role:
+        required: true
+        type: string
+
+      aws_region:
+        required: true
+        type: string
+
+jobs:
+  build-and-test-meta-browser:
+    name: Build and Test Meta-Browser
+    runs-on: ${{ inputs.runner_name }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Configure AWS credentials for accessing S3 cache buckets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: ${{ inputs.aws_region }}
+          role-to-assume: ${{ inputs.aws_arn_role }}
+
+      # Download config file and set environment variables
+      - name: Download config file and set env vars from it
+        run: |
+          aws s3 cp s3://meta-browser-ci-config-bucket/config.json .
+          aws s3 cp s3://meta-browser-ci-config-bucket/set_github_env_vars.py .
+          python3 set_github_env_vars.py --file config.json
+
+      # Install required packages
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nfs-common git build-essential python3-pip
+          sudo apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib \
+            build-essential chrpath socat cpio python3 python3-pip python3-pexpect \
+            xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa \
+            libsdl1.2-dev pylint3 xterm python3-subunit mesa-common-dev zstd liblz4-tool
+
+      # Mount EFS file systems
+      - name: Mount EFS file systems
+        run: |
+          # Create mount points
+          sudo mkdir -p /mnt/shared-cache /mnt/git-mirror
+          
+          # Mount shared cache EFS (sstate, downloads)
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
+            ${{ env.SHARED_CACHE_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/shared-cache
+          
+          # Mount git mirror EFS
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
+            ${{ env.GIT_MIRROR_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/git-mirror
+          
+          # Create cache directories if they don't exist
+          sudo mkdir -p /mnt/shared-cache/sstate-cache
+          sudo mkdir -p /mnt/shared-cache/downloads
+          
+          # Set permissions
+          sudo chown -R ubuntu:ubuntu /mnt/shared-cache /mnt/git-mirror
+
+      # Set up build directories with EFS mounts
+      - name: Setup build environment
+        run: |
+          mkdir -p /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          
+          # Clean any previous builds
+          rm -rf meta-browser meta-chromium-test build/tmp/work/*/*/*/pseudo build/tmp/sysroots-components/*/pseudo 2>/dev/null || true
+          
+          # Create symlinks to EFS mounts
+          ln -sf /mnt/shared-cache/sstate-cache ./sstate-cache
+          ln -sf /mnt/shared-cache/downloads ./downloads
+
+      # Clone repositories (check if PR or manual trigger)
+      - name: Clone repositories
+        run: |
+          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+              GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
+              GH_REV="$GITHUB_HEAD_REF"
+          else
+              GH_URL="$GITHUB_SERVER_URL/brightsign/meta-browser"
+              GH_REV="master"
+          fi
+          
+          echo "Cloning from $GH_URL, branch/ref: $GH_REV"
+          git clone $GH_URL
+          git -C meta-browser checkout $GH_REV
+          
+          # Clone the test repo
+          git clone -b main https://github.com/brightsign/meta-chromium-test.git
+
+      # Run the build
+      - name: Build Browser
+        run: |
+          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          
+          # Set environment variables for caching (EFS mounts only)
+          export SSTATE_DIR=/mnt/shared-cache/sstate-cache
+          export DL_DIR=/mnt/shared-cache/downloads
+          
+          # Determine build type based on chromium_version parameter
+          if [[ "${{ inputs.chromium_version }}" == *"ozone-wayland"* ]]; then
+            BUILD_TYPE="chromium"
+            BROWSER_VERSION="ozone-wayland"
+          elif [[ "${{ inputs.chromium_version }}" == *"ozone-x11"* ]]; then
+            BUILD_TYPE="electron"
+            BROWSER_VERSION="ozone-x11"
+          elif [[ "${{ inputs.chromium_version }}" == *"x11"* ]]; then
+            BUILD_TYPE="chromium"
+            BROWSER_VERSION="x11"
+          else
+            BUILD_TYPE="chromium"
+            BROWSER_VERSION="${{ inputs.chromium_version }}"
+          fi
+          
+          echo "Building $BUILD_TYPE with version $BROWSER_VERSION"
+          
+          # Run the build script
+          ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} $BROWSER_VERSION $BUILD_TYPE ${{ inputs.libc_flavour }}
+
+      # Upload build artifacts to S3 (if successful)
+      - name: Upload artifacts
+        if: success()
+        run: |
+          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          
+          # Find and upload build artifacts
+          DEPLOY_DIR=$(find build -name "deploy" -type d | head -1)
+          if [ -n "$DEPLOY_DIR" ] && [ -d "$DEPLOY_DIR" ]; then
+            echo "Uploading artifacts from $DEPLOY_DIR"
+            # Determine build type for artifact path
+            if [[ "${{ inputs.chromium_version }}" == *"ozone-x11"* ]]; then
+              BUILD_TYPE="electron"
+            else
+              BUILD_TYPE="chromium"
+            fi
+            aws s3 sync $DEPLOY_DIR/ s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${BUILD_TYPE}/${{ inputs.chromium_version }}/${{ github.run_id }}/ --quiet
+          else
+            echo "No deploy directory found"
+          fi
+
+      # Unmount EFS file systems
+      - name: Cleanup EFS mounts
+        if: always()
+        run: |
+          sudo umount /mnt/shared-cache || true
+          sudo umount /mnt/git-mirror || true

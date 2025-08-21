@@ -11,6 +11,11 @@ on:
         description: 'Branch to checkout for the workflow'
         required: true
         default: 'master'
+      use_aws:
+        description: 'Use AWS EC2 instances instead of local runner'
+        required: false
+        type: boolean
+        default: true
   pull_request:
     branches:
       - master
@@ -24,10 +29,33 @@ permissions:
   contents: read
   actions: read
   checks: write
+  id-token: write  # Required for OIDC authentication
 
 jobs:
-  build:
-    if: ${{ github.repository_owner == 'brightsign' }}
+  # AWS-based builds (default)
+  aws-matrix-build:
+    if: ${{ github.repository_owner == 'brightsign' && (inputs.use_aws == true || inputs.use_aws == null) }}
+    strategy:
+      matrix:
+        yocto_version: [master]
+        chromium_version: [ozone-wayland, x11]
+        libc_flavour: [glibc]
+        arch: [arm, aarch64, x86-64]
+    uses: ./.github/workflows/bs_meta_browser_ci_ec2.yml
+    secrets: inherit
+    with:
+      build_type: "release"
+      yocto_version: ${{ matrix.yocto_version }}
+      chromium_version: ${{ matrix.chromium_version }}
+      libc_flavour: ${{ matrix.libc_flavour }}
+      arch: ${{ matrix.arch }}
+      aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
+      aws_region: "us-east-1"
+      instance_type: "c6a.4xlarge"
+
+  # Local runner fallback
+  local-build:
+    if: ${{ github.repository_owner == 'brightsign' && inputs.use_aws == false }}
     strategy:
       matrix:
         yocto_version: [master]
