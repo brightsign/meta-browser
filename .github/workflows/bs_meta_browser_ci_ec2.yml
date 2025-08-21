@@ -7,6 +7,11 @@ on:
         required: true
         type: string
 
+      browser:
+        description: 'Chromium or Electron'
+        required: true
+        type: string
+
       yocto_version:
         description: 'Yocto version'
         required: true
@@ -101,6 +106,7 @@ jobs:
     with:
       runner_name: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
       github_hosted_runner: false
+      browser: ${{ inputs.browser }}
       build_type: ${{ inputs.build_type }}
       yocto_version: ${{ inputs.yocto_version }}
       chromium_version: ${{ inputs.chromium_version }}
