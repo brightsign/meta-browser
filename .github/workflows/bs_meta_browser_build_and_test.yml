@@ -87,13 +87,64 @@ jobs:
           # Create mount points
           sudo mkdir -p /mnt/shared-cache /mnt/git-mirror
           
-          # Mount shared cache EFS (sstate, downloads)
-          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
-            ${{ env.SHARED_CACHE_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/shared-cache
+          # Debug DNS resolution
+          echo "=== DNS Troubleshooting ==="
+          echo "Checking DNS resolution for EFS endpoints..."
+          nslookup ${{ env.SHARED_CACHE_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com || echo "DNS lookup failed"
+          nslookup ${{ env.GIT_MIRROR_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com || echo "DNS lookup failed"
           
-          # Mount git mirror EFS
-          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
-            ${{ env.GIT_MIRROR_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/git-mirror
+          # Check AWS metadata service and VPC DNS
+          echo "=== VPC DNS Settings ==="
+          curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -1 | xargs -I {} curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/{}/vpc-id || echo "VPC metadata failed"
+          
+          # Check if we can reach AWS services
+          echo "=== AWS Connectivity Check ==="
+          curl -s --connect-timeout 10 https://s3.amazonaws.com && echo "S3 reachable" || echo "S3 not reachable"
+          
+          # Alternative: Use mount target IP if DNS fails
+          echo "=== Alternative EFS Mount Strategy ==="
+          # Try to resolve mount target IPs through AWS CLI if available
+          if command -v aws &> /dev/null; then
+            echo "Attempting to get EFS mount targets..."
+            aws efs describe-mount-targets --file-system-id ${{ env.SHARED_CACHE_EFS_ID }} --region ${{ env.AWS_REGION }} || echo "AWS CLI describe failed"
+          fi
+          
+          # Try using regional EFS mount target instead
+          echo "=== Trying regional EFS mount ==="
+          echo "Shared cache EFS: ${{ env.SHARED_CACHE_EFS_ID }}"
+          echo "Git mirror EFS: ${{ env.GIT_MIRROR_EFS_ID }}"
+          echo "AWS Region: ${{ env.AWS_REGION }}"
+          
+          # Mount shared cache EFS (sstate, downloads) with retries
+          for i in {1..3}; do
+            echo "Attempt $i: Mounting shared cache EFS..."
+            if sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
+              ${{ env.SHARED_CACHE_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/shared-cache; then
+              echo "Shared cache EFS mounted successfully"
+              break
+            else
+              echo "Mount attempt $i failed, retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+          
+          # Mount git mirror EFS with retries
+          for i in {1..3}; do
+            echo "Attempt $i: Mounting git mirror EFS..."
+            if sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
+              ${{ env.GIT_MIRROR_EFS_ID }}.efs.${{ env.AWS_REGION }}.amazonaws.com:/ /mnt/git-mirror; then
+              echo "Git mirror EFS mounted successfully"
+              break
+            else
+              echo "Mount attempt $i failed, retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+          
+          # Verify mounts
+          echo "=== Mount Verification ==="
+          mount | grep efs || echo "No EFS mounts found"
+          df -h | grep mnt || echo "No mnt filesystems found"
           
           # Create cache directories if they don't exist
           sudo mkdir -p /mnt/shared-cache/sstate-cache
