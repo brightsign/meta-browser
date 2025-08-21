@@ -73,13 +73,30 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y nfs-common git build-essential python3-pip
+          
+          # Yocto build dependencies (matching Docker container requirements)
           sudo apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib \
             build-essential chrpath socat cpio python3 python3-pip python3-pexpect \
             xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa \
-            libsdl1.2-dev pylint xterm python3-subunit mesa-common-dev zstd liblz4-tool
+            libsdl1.2-dev pylint xterm python3-subunit mesa-common-dev zstd liblz4-tool \
+            file locales sudo
+            
+          # Additional tools that might be in the Docker container
+          sudo apt-get install -y vim nano less curl wget rsync
+          
+          # Set up locale (as typically done in Docker containers)
           locale --all-locales | grep en_US.utf8 || true
           echo "en_US.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen
           sudo locale-gen
+          export LANG=en_US.UTF-8
+          export LC_ALL=en_US.UTF-8
+          
+          # Install kas (Yocto build tool) - this is crucial for the build script
+          python3 -m pip install --user kas
+          
+          # Ensure the user has a proper shell environment
+          echo 'export LANG=en_US.UTF-8' >> ~/.bashrc
+          echo 'export LC_ALL=en_US.UTF-8' >> ~/.bashrc
 
       # Mount EFS file systems
       - name: Mount EFS file systems
@@ -156,6 +173,16 @@ jobs:
       # Set up build directories with EFS mounts
       - name: Setup build environment
         run: |
+          # Set environment variables that might be expected
+          export LANG=en_US.UTF-8
+          export LC_ALL=en_US.UTF-8
+          
+          # Create the expected directory structure for the build script
+          # The build script expects to run from /yocto/master and create dirs in /yocto
+          sudo mkdir -p /yocto/${{ inputs.yocto_version }}
+          sudo chown -R ubuntu:ubuntu /yocto
+          
+          # Also ensure our working directory exists
           mkdir -p /home/ubuntu/yocto/${{ inputs.yocto_version }}
           cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
           
@@ -165,6 +192,20 @@ jobs:
           # Create symlinks to EFS mounts
           ln -sf /mnt/shared-cache/sstate-cache ./sstate-cache
           ln -sf /mnt/shared-cache/downloads ./downloads
+          
+          # Create symlinks in /yocto to allow the build script to work
+          ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
+          ln -sf /mnt/shared-cache/downloads /yocto/yocto_dl
+          
+          # Create other directories that the build script expects with proper permissions
+          sudo mkdir -p /yocto/yocto_ccache /yocto/test-images
+          sudo chmod 755 /yocto/yocto_ccache /yocto/test-images
+          sudo chown -R ubuntu:ubuntu /yocto/yocto_ccache /yocto/test-images
+          
+          # Ensure kas and other tools are in PATH for the build
+          echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
+          echo "export LANG=en_US.UTF-8" >> ~/.bashrc
+          echo "export LC_ALL=en_US.UTF-8" >> ~/.bashrc
 
       # Clone repositories (check if PR or manual trigger)
       - name: Clone repositories
@@ -183,13 +224,38 @@ jobs:
           git clone $GH_URL
           git -C meta-browser checkout $GH_REV
           
-          # Clone the test repo
-          git clone -b main https://github.com/brightsign/meta-chromium-test.git
+          # Clone the test repo (use electron-master branch for electron builds)
+          if [[ "${{ inputs.chromium_version }}" == *"ozone-x11"* ]]; then
+            echo "Cloning meta-chromium-test electron-master branch for electron build"
+            git clone -b electron-master https://github.com/brightsign/meta-chromium-test.git
+          else
+            echo "Cloning meta-chromium-test main branch for chromium build" 
+            git clone -b main https://github.com/brightsign/meta-chromium-test.git
+          fi
 
       # Run the build
       - name: Build Browser
         run: |
-          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          # Set environment variables that the Docker container would have
+          export LANG=en_US.UTF-8
+          export LC_ALL=en_US.UTF-8
+          export PATH=$PATH:$HOME/.local/bin
+          
+          # Debug environment
+          echo "=== Environment Debug ==="
+          echo "PATH: $PATH"
+          echo "LANG: $LANG"
+          echo "LC_ALL: $LC_ALL"
+          echo "User: $(whoami)"
+          echo "Home: $HOME"
+          which kas || echo "kas not found in PATH"
+          
+          # The build script expects to run from /yocto/master
+          cd /yocto/${{ inputs.yocto_version }}
+          
+          # Copy the repositories from our working directory
+          cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-browser ./
+          cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-chromium-test ./
           
           # Set environment variables for caching (EFS mounts only)
           export SSTATE_DIR=/mnt/shared-cache/sstate-cache
@@ -211,6 +277,23 @@ jobs:
           fi
           
           echo "Building $BUILD_TYPE with version $BROWSER_VERSION"
+          echo "Current directory: $(pwd)"
+          echo "Directory contents: $(ls -la)"
+          echo "Yocto directories:"
+          ls -la /yocto/ 2>/dev/null || echo "No /yocto directory"
+          
+          # Verify the build script exists and is executable
+          if [ -f "./meta-chromium-test/scripts/build.sh" ]; then
+            echo "Build script found"
+            ls -la ./meta-chromium-test/scripts/build.sh
+            chmod +x ./meta-chromium-test/scripts/build.sh
+            echo "=== Build script first 20 lines ==="
+            head -20 ./meta-chromium-test/scripts/build.sh
+          else
+            echo "Build script not found!"
+            find . -name "build.sh" 2>/dev/null || echo "No build.sh found anywhere"
+            exit 1
+          fi
           
           # Run the build script
           ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} $BROWSER_VERSION $BUILD_TYPE ${{ inputs.libc_flavour }}
@@ -219,7 +302,7 @@ jobs:
       - name: Upload artifacts
         if: success()
         run: |
-          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          cd /yocto/${{ inputs.yocto_version }}
           
           # Find and upload build artifacts
           DEPLOY_DIR=$(find build -name "deploy" -type d | head -1)
@@ -234,6 +317,8 @@ jobs:
             aws s3 sync $DEPLOY_DIR/ s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${BUILD_TYPE}/${{ inputs.chromium_version }}/${{ github.run_id }}/ --quiet
           else
             echo "No deploy directory found"
+            echo "Available directories:"
+            find . -name "deploy" -type d 2>/dev/null || echo "No deploy directories found"
           fi
 
       # Unmount EFS file systems
