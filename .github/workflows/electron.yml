@@ -32,9 +32,9 @@ permissions:
   id-token: write  # Required for OIDC authentication
 
 jobs:
-  # AWS-based builds (default)
+  # AWS-based builds (always for PR, default for manual dispatch)
   aws-matrix-build:
-    if: ${{ github.repository_owner == 'brightsign' && (inputs.use_aws == true || inputs.use_aws == null) }}
+    if: ${{ github.repository_owner == 'brightsign' && (github.event_name == 'pull_request' || inputs.use_aws == true || inputs.use_aws == null) }}
     strategy:
       matrix:
         yocto_version: [master]
@@ -53,9 +53,9 @@ jobs:
       aws_region: "us-east-1"
       instance_type: "c6a.4xlarge"
 
-  # Local runner fallback
+  # Local runner (manual dispatch only, when explicitly disabled AWS)
   local-build:
-    if: ${{ github.repository_owner == 'brightsign' && inputs.use_aws == false }}
+    if: ${{ github.repository_owner == 'brightsign' && github.event_name == 'workflow_dispatch' && inputs.use_aws == false }}
     strategy:
       matrix:
         yocto_version: [master]
