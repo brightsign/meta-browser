@@ -36,6 +36,7 @@ jobs:
   aws-matrix-build:
     if: ${{ github.repository_owner == 'brightsign' && (github.event_name == 'pull_request' || inputs.use_aws == true || inputs.use_aws == null) }}
     strategy:
+      fail-fast: false  # Continue other matrix jobs even if one fails
       matrix:
         yocto_version: [master]
         chromium_version: [ozone-wayland, ozone-x11]
@@ -58,6 +59,7 @@ jobs:
   local-build:
     if: ${{ github.repository_owner == 'brightsign' && github.event_name == 'workflow_dispatch' && inputs.use_aws == false }}
     strategy:
+      fail-fast: false  # Continue other matrix jobs even if one fails
       matrix:
         yocto_version: [master]
         browser_version: [ozone-wayland, ozone-x11]
