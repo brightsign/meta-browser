@@ -1,0 +1,140 @@
+name: 'BrightSign Build and Test Meta-Browser: EC2 controller'
+on:
+  workflow_call:
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        type: string
+
+      browser:
+        description: 'Chromium or Electron'
+        required: true
+        type: string
+
+      yocto_version:
+        description: 'Yocto version'
+        required: true
+        type: string
+
+      chromium_version:
+        description: 'Chromium version (ozone-wayland or x11)'
+        required: true
+        type: string
+
+      libc_flavour:
+        description: 'libc flavour'
+        required: true
+        type: string
+
+      arch:
+        description: 'Architecture'
+        required: true
+        type: string
+
+      instance_type:
+        description: 'EC2 instance type'
+        required: false
+        type: string
+        default: c6a.4xlarge
+
+      leave_ec2_instance_running:
+        description: 'Leave EC2 instance running after use'
+        type: boolean
+        default: false
+
+      instance_name_postfix:
+        description: 'Name to add as postfix to the EC2 machine'
+        type: string
+        default: auto-triggered
+
+      aws_arn_role:
+        required: true
+        type: string
+
+      aws_region:
+        required: true
+        type: string
+
+jobs:
+  start-runner:
+    name: Start self-hosted EC2 runner
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: ${{ inputs.aws_region }}
+          role-to-assume: ${{ inputs.aws_arn_role }}
+
+      - name: Download config file and set env vars from it
+        run: |
+          aws s3 cp s3://meta-browser-ci-config-bucket/config.json .
+          aws s3 cp s3://meta-browser-ci-config-bucket/set_github_env_vars.py .
+          python3 set_github_env_vars.py --file config.json
+
+      - name: Start EC2 runner
+        id: start-ec2-runner
+        uses: brightsign/ec2-github-runner@0fa8b183dd4124fd191ccdbc48b68f0ea46a9634
+        with:
+          mode: start
+          github-app-private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          github-app-id: 287690
+          ec2-image-id: ami-07b4a16cd5294af98  # TODO: Create custom AMI for Yocto builds
+          ec2-instance-type: ${{ inputs.instance_type }}
+          subnet-id: ${{ env.VPC_SUBNET_ID }}
+          security-group-id: ${{ env.VPC_SG_ID }}
+          run-as-service-with-user: ubuntu
+          runner-home-dir: /home/ubuntu
+          aws-resource-tags: > # optional, requires additional permissions
+            [
+              {"Key": "Name", "Value": "github-runner-meta-browser-${{ inputs.instance_name_postfix }}"},
+              {"Key": "GitHubRepository", "Value": "${{ github.repository }}"},
+              {"Key": "YoctoVersion", "Value": "${{ inputs.yocto_version }}"},
+              {"Key": "ChromiumVersion", "Value": "${{ inputs.chromium_version }}"},
+              {"Key": "Architecture", "Value": "${{ inputs.arch }}"}
+            ]
+
+  build-and-test-meta-browser:
+    name: Build and Test Meta-Browser
+    needs: start-runner # required to start the main job when the runner is ready
+    uses: ./.github/workflows/bs_meta_browser_build_and_test.yml
+    secrets: inherit
+    with:
+      runner_name: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+      github_hosted_runner: false
+      browser: ${{ inputs.browser }}
+      build_type: ${{ inputs.build_type }}
+      yocto_version: ${{ inputs.yocto_version }}
+      chromium_version: ${{ inputs.chromium_version }}
+      libc_flavour: ${{ inputs.libc_flavour }}
+      arch: ${{ inputs.arch }}
+      aws_arn_role: ${{ inputs.aws_arn_role }}
+      aws_region: ${{ inputs.aws_region }}
+
+  stop-runner:
+    name: Stop self-hosted EC2 runner
+    needs:
+      - start-runner # required to get output from the start-runner job
+      - build-and-test-meta-browser # required to wait when the main job is done
+    runs-on: ubuntu-latest
+    if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          role-to-assume: ${{ inputs.aws_arn_role }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Stop EC2 runner
+        uses: brightsign/ec2-github-runner@0fa8b183dd4124fd191ccdbc48b68f0ea46a9634
+        with:
+          mode: stop
+          github-app-private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          github-app-id: 287690
+          label: ${{ needs.start-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
+          leave-ec2-instance-running: ${{ inputs.leave_ec2_instance_running }}

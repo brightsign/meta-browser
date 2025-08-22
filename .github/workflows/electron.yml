@@ -1,4 +1,4 @@
-name: Chromium build- and smoke-test
+name: Electron build- and smoke-test
 
 on:
   workflow_dispatch:
@@ -21,9 +21,9 @@ on:
       - master
     paths:
       - 'meta-chromium/recipes-browser/chromium/files/**'
-      - 'meta-chromium/recipes-browser/chromium/chromium*'
+      - 'meta-chromium/recipes-browser/chromium/electron*'
       - 'meta-chromium/recipes-browser/chromium/gn*'
-      - '.github/workflows/chromium.yml'
+      - '.github/workflows/electron.yml'
 
 permissions:
   contents: read
@@ -39,21 +39,21 @@ jobs:
       fail-fast: false  # Continue other matrix jobs even if one fails
       matrix:
         yocto_version: [master]
-        chromium_version: [ozone-wayland, x11]
+        chromium_version: [ozone-wayland, ozone-x11]
         libc_flavour: [glibc]
         arch: [arm, aarch64, x86-64]
     uses: ./.github/workflows/bs_meta_browser_ci_ec2.yml
     secrets: inherit
     with:
       build_type: "release"
-      browser: "chromium"
+      browser: "electron"
       yocto_version: ${{ matrix.yocto_version }}
       chromium_version: ${{ matrix.chromium_version }}
       libc_flavour: ${{ matrix.libc_flavour }}
       arch: ${{ matrix.arch }}
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
       aws_region: "us-east-1"
-      instance_type: "c6a.16xlarge"  # Increased from 4xlarge for faster builds
+      instance_type: "c6a.16xlarge"
 
   # Local runner (manual dispatch only, when explicitly disabled AWS)
   local-build:
@@ -62,8 +62,8 @@ jobs:
       fail-fast: false  # Continue other matrix jobs even if one fails
       matrix:
         yocto_version: [master]
-        browser_version: [ozone-wayland, x11]
-        browser: [chromium]
+        browser_version: [ozone-wayland, ozone-x11]
+        browser: [electron]
         libc_flavour: [glibc]
         arch: [arm, aarch64, x86-64]
     runs-on: [self-hosted, chromium]
