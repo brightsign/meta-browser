@@ -388,13 +388,67 @@ jobs:
           # Find and upload build artifacts
           DEPLOY_DIR=$(find build -name "deploy" -type d | head -1)
           if [ -n "$DEPLOY_DIR" ] && [ -d "$DEPLOY_DIR" ]; then
-            echo "Uploading artifacts from $DEPLOY_DIR"
-            # Use chromium_version for artifact path
-            aws s3 sync $DEPLOY_DIR/ s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${{ inputs.chromium_version }}/${{ github.run_id }}/ --quiet
+            echo "=== Artifact Upload ==="
+            echo "Deploy directory: $DEPLOY_DIR"
+            echo "Checking directory contents:"
+            ls -la "$DEPLOY_DIR" || echo "Failed to list deploy directory"
+            
+            # Check available disk space
+            echo "Available disk space:"
+            df -h
+            
+            # Calculate upload size
+            UPLOAD_SIZE=$(du -sh "$DEPLOY_DIR" | cut -f1)
+            echo "Upload size: $UPLOAD_SIZE"
+            
+            # S3 destination path
+            S3_PATH="s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${{ inputs.chromium_version }}/${{ github.run_id }}/"
+            echo "S3 destination: $S3_PATH"
+            echo "Bucket name from env: ${ARTIFACT_BUCKET_NAME}"
+            
+            # Test S3 access first
+            echo "Testing S3 bucket access..."
+            if aws s3 ls "s3://${ARTIFACT_BUCKET_NAME}/" > /dev/null 2>&1; then
+              echo "✓ S3 bucket access confirmed"
+            else
+              echo "ERROR: Cannot access S3 bucket ${ARTIFACT_BUCKET_NAME}"
+              echo "AWS CLI version:"
+              aws --version
+              echo "AWS credentials configured:"
+              aws sts get-caller-identity || echo "Failed to get caller identity"
+              echo "Available S3 buckets:"
+              aws s3 ls || echo "Failed to list buckets"
+              echo "Trying alternative bucket name..."
+              # Try with the exact bucket name from logs
+              if aws s3 ls "s3://meta-browser-ci-public-artifact-bucket/" > /dev/null 2>&1; then
+                echo "✓ Found bucket with hardcoded name"
+                export ARTIFACT_BUCKET_NAME="meta-browser-ci-public-artifact-bucket"
+                S3_PATH="s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${{ inputs.chromium_version }}/${{ github.run_id }}/"
+                echo "Updated S3 destination: $S3_PATH"
+              else
+                echo "✗ Cannot access any expected bucket"
+                exit 1
+              fi
+            fi
+            
+            echo "Starting S3 upload..."
+            # Use verbose mode and enable progress tracking
+            if aws s3 sync "$DEPLOY_DIR/" "$S3_PATH" --cli-read-timeout 0 --cli-connect-timeout 60; then
+              echo "✓ Artifacts uploaded successfully to $S3_PATH"
+              
+              # Verify upload
+              echo "Verifying upload..."
+              aws s3 ls "$S3_PATH" --recursive --human-readable --summarize
+            else
+              echo "✗ S3 upload failed"
+              exit 1
+            fi
           else
             echo "No deploy directory found"
             echo "Available directories:"
             find . -name "deploy" -type d 2>/dev/null || echo "No deploy directories found"
+            echo "Build directory structure:"
+            find build -type d -maxdepth 3 2>/dev/null || echo "No build directory found"
           fi
 
       # Unmount EFS file systems
