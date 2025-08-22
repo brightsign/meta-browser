@@ -53,7 +53,7 @@ jobs:
       arch: ${{ matrix.arch }}
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
       aws_region: "us-east-1"
-      instance_type: "c6a.4xlarge"
+      instance_type: "c6a.16xlarge"
 
   # Local runner (manual dispatch only, when explicitly disabled AWS)
   local-build:
