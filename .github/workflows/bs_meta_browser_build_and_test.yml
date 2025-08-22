@@ -107,6 +107,51 @@ jobs:
           echo 'export LANG=en_US.UTF-8' >> ~/.bashrc
           echo 'export LC_ALL=en_US.UTF-8' >> ~/.bashrc
 
+      # Setup large swap space on local NVMe SSD for memory-intensive Yocto builds
+      - name: Setup swap space
+        run: |
+          echo "=== Setting up 128GB swap space ==="
+          # Check for NVMe devices (c6id instances have local NVMe storage)
+          if [ -b /dev/nvme1n1 ]; then
+            echo "Found NVMe device: /dev/nvme1n1"
+            echo "Device info:"
+            lsblk /dev/nvme1n1
+            
+            # Create a 128GB swap file on the NVMe device
+            sudo mkfs.ext4 /dev/nvme1n1
+            sudo mkdir -p /mnt/nvme
+            sudo mount /dev/nvme1n1 /mnt/nvme
+            
+            echo "Creating 128GB swap file (this may take a few minutes)..."
+            sudo fallocate -l 128G /mnt/nvme/swapfile
+            sudo chmod 600 /mnt/nvme/swapfile
+            sudo mkswap /mnt/nvme/swapfile
+            sudo swapon /mnt/nvme/swapfile
+            
+            # Optimize swap performance for build workloads
+            echo "Optimizing swap settings for build performance..."
+            echo 10 | sudo tee /proc/sys/vm/swappiness  # Reduce swap usage preference
+            echo 1 | sudo tee /proc/sys/vm/vfs_cache_pressure  # Favor keeping build caches in memory
+            
+            echo "✓ 128GB swap enabled on NVMe SSD with optimized settings"
+          else
+            echo "No NVMe device found, creating large swap on root filesystem"
+            # Fallback: create large swap file on root filesystem
+            echo "Creating 64GB swap file (reduced size for root filesystem)..."
+            sudo fallocate -l 64G /swapfile
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+            echo "✓ 64GB swap enabled on root filesystem"
+          fi
+          
+          # Verify swap is active
+          echo "=== Memory and swap status ==="
+          free -h
+          swapon --show
+          echo "Available disk space:"
+          df -h
+
       # Mount EFS file systems
       - name: Mount EFS file systems
         run: |
