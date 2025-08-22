@@ -95,9 +95,9 @@ jobs:
           sudo mkdir -p /mnt/shared-cache
           
           # Mount EFS (using the shared cache EFS ID)
-          echo "Mounting EFS: fs-065ed1ce53c230c7d"
+          echo "Mounting EFS: fs-0ee52486275950d2e"
           sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,intr,timeo=600 \
-            fs-065ed1ce53c230c7d.efs.${{ inputs.aws_region }}.amazonaws.com:/ /mnt/shared-cache
+            fs-0ee52486275950d2e.efs.${{ inputs.aws_region }}.amazonaws.com:/ /mnt/shared-cache
           
           # Show current disk usage
           echo "=== Current EFS disk usage ==="

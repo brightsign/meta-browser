@@ -55,6 +55,7 @@ jobs:
   build-and-test-meta-browser:
     name: Build and Test Meta-Browser
     runs-on: ${{ inputs.runner_name }}
+    timeout-minutes: 480  # 8 hours - increase for long Yocto builds
     defaults:
       run:
         shell: bash
@@ -284,6 +285,7 @@ jobs:
 
       # Run the build
       - name: Build Browser
+        timeout-minutes: 420  # 7 hours for Yocto build
         run: |
           # Set environment variables that the Docker container would have
           export LANG=en_US.UTF-8
