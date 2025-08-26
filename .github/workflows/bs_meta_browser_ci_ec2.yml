@@ -89,13 +89,15 @@ jobs:
           security-group-id: ${{ env.VPC_SG_ID }}
           run-as-service-with-user: ubuntu
           runner-home-dir: /home/ubuntu
+          label: "runner-${{ github.run_id }}-${{ inputs.yocto_version }}-${{ inputs.arch }}-${{ inputs.chromium_version }}"  # Unique label to avoid hostname conflicts
           aws-resource-tags: > # optional, requires additional permissions
             [
               {"Key": "Name", "Value": "github-runner-meta-browser-${{ inputs.instance_name_postfix }}"},
               {"Key": "GitHubRepository", "Value": "${{ github.repository }}"},
               {"Key": "YoctoVersion", "Value": "${{ inputs.yocto_version }}"},
               {"Key": "ChromiumVersion", "Value": "${{ inputs.chromium_version }}"},
-              {"Key": "Architecture", "Value": "${{ inputs.arch }}"}
+              {"Key": "Architecture", "Value": "${{ inputs.arch }}"},
+              {"Key": "RunId", "Value": "${{ github.run_id }}"}
             ]
 
   build-and-test-meta-browser:
