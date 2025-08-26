@@ -379,6 +379,14 @@ jobs:
           # Run the build script
           ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} ${{ inputs.chromium_version }} ${{ inputs.browser }} ${{ inputs.libc_flavour }}
 
+      # Refresh AWS credentials before upload (they may have expired during long build)
+      - name: Refresh AWS credentials for artifact upload
+        if: success()
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ARN_ROLE }}
+
       # Upload build artifacts to S3 (if successful)
       - name: Upload artifacts
         if: success()
@@ -406,30 +414,9 @@ jobs:
             echo "S3 destination: $S3_PATH"
             echo "Bucket name from env: ${ARTIFACT_BUCKET_NAME}"
             
-            # Test S3 access first
-            echo "Testing S3 bucket access..."
-            if aws s3 ls "s3://${ARTIFACT_BUCKET_NAME}/" > /dev/null 2>&1; then
-              echo "✓ S3 bucket access confirmed"
-            else
-              echo "ERROR: Cannot access S3 bucket ${ARTIFACT_BUCKET_NAME}"
-              echo "AWS CLI version:"
-              aws --version
-              echo "AWS credentials configured:"
-              aws sts get-caller-identity || echo "Failed to get caller identity"
-              echo "Available S3 buckets:"
-              aws s3 ls || echo "Failed to list buckets"
-              echo "Trying alternative bucket name..."
-              # Try with the exact bucket name from logs
-              if aws s3 ls "s3://meta-browser-ci-public-artifact-bucket/" > /dev/null 2>&1; then
-                echo "✓ Found bucket with hardcoded name"
-                export ARTIFACT_BUCKET_NAME="meta-browser-ci-public-artifact-bucket"
-                S3_PATH="s3://${ARTIFACT_BUCKET_NAME}/meta-browser/${{ inputs.yocto_version }}/${{ inputs.arch }}/${{ inputs.chromium_version }}/${{ github.run_id }}/"
-                echo "Updated S3 destination: $S3_PATH"
-              else
-                echo "✗ Cannot access any expected bucket"
-                exit 1
-              fi
-            fi
+            # Verify AWS credentials are working
+            echo "Verifying AWS credentials..."
+            aws sts get-caller-identity
             
             echo "Starting S3 upload..."
             # Use verbose mode and enable progress tracking
