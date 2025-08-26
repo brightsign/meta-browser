@@ -53,7 +53,7 @@ jobs:
       arch: ${{ matrix.arch }}
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
       aws_region: "us-east-1"
-      instance_type: "c6id.4xlarge"  # Uses NVMe SSD for swap to handle memory pressure
+      instance_type: "c6id.8xlarge"  # Uses NVMe SSD for swap to handle memory pressure
 
   # Local runner (manual dispatch only, when explicitly disabled AWS)
   local-build:
