@@ -110,20 +110,20 @@ jobs:
       # Setup large swap space on local NVMe SSD for memory-intensive Yocto builds
       - name: Setup swap space
         run: |
-          echo "=== Setting up 128GB swap space ==="
+          echo "=== Setting up 256GB swap space ==="
           # Check for NVMe devices (c6id instances have local NVMe storage)
           if [ -b /dev/nvme1n1 ]; then
             echo "Found NVMe device: /dev/nvme1n1"
             echo "Device info:"
             lsblk /dev/nvme1n1
             
-            # Create a 128GB swap file on the NVMe device
+            # Create a 256GB swap file on the NVMe device
             sudo mkfs.ext4 /dev/nvme1n1
             sudo mkdir -p /mnt/nvme
             sudo mount /dev/nvme1n1 /mnt/nvme
             
-            echo "Creating 128GB swap file (this may take a few minutes)..."
-            sudo fallocate -l 128G /mnt/nvme/swapfile
+            echo "Creating 256GB swap file (this may take a few minutes)..."
+            sudo fallocate -l 256G /mnt/nvme/swapfile
             sudo chmod 600 /mnt/nvme/swapfile
             sudo mkswap /mnt/nvme/swapfile
             sudo swapon /mnt/nvme/swapfile
@@ -133,7 +133,7 @@ jobs:
             echo 10 | sudo tee /proc/sys/vm/swappiness  # Reduce swap usage preference
             echo 1 | sudo tee /proc/sys/vm/vfs_cache_pressure  # Favor keeping build caches in memory
             
-            echo "✓ 128GB swap enabled on NVMe SSD with optimized settings"
+            echo "✓ 256GB swap enabled on NVMe SSD with optimized settings"
           else
             echo "No NVMe device found, creating large swap on root filesystem"
             # Fallback: create large swap file on root filesystem
