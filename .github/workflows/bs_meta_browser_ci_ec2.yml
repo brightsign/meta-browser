@@ -83,7 +83,7 @@ jobs:
           mode: start
           github-app-private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           github-app-id: 287690
-          ec2-image-id: ami-07b4a16cd5294af98  # TODO: Create custom AMI for Yocto builds
+          ec2-image-id: ami-08a4255385679596c  # Custom AMI with Yocto build dependencies pre-installed
           ec2-instance-type: ${{ inputs.instance_type }}
           subnet-id: ${{ env.VPC_SUBNET_ID }}
           security-group-id: ${{ env.VPC_SG_ID }}
