@@ -351,9 +351,37 @@ jobs:
           cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-browser ./
           cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-chromium-test ./
           
-          # Set environment variables for caching (EFS mounts only)
-          export SSTATE_DIR=/mnt/shared-cache/sstate-cache
-          export DL_DIR=/mnt/shared-cache/downloads
+          # Create cache directories if they don't exist
+          sudo mkdir -p /mnt/shared-cache/sstate-cache
+          sudo mkdir -p /mnt/shared-cache/downloads
+          sudo chown -R ubuntu:ubuntu /mnt/shared-cache/sstate-cache
+          sudo chown -R ubuntu:ubuntu /mnt/shared-cache/downloads
+          sudo chmod -R 755 /mnt/shared-cache/sstate-cache
+          sudo chmod -R 755 /mnt/shared-cache/downloads
+          
+          # Test cache directory accessibility
+          if [ -w /mnt/shared-cache/sstate-cache ]; then
+            echo "✓ sstate-cache directory is writable"
+            # Check if cache has existing content
+            SSTATE_COUNT=$(find /mnt/shared-cache/sstate-cache -name "*.tar.*" | wc -l)
+            echo "  Existing sstate files: $SSTATE_COUNT"
+          else
+            echo "✗ sstate-cache directory is not writable"
+          fi
+          
+          if [ -w /mnt/shared-cache/downloads ]; then
+            echo "✓ downloads directory is writable"
+            # Check if downloads has existing content
+            DOWNLOADS_COUNT=$(find /mnt/shared-cache/downloads -type f | wc -l)
+            echo "  Existing download files: $DOWNLOADS_COUNT"
+          else
+            echo "✗ downloads directory is not writable"
+          fi
+          
+          # Show cache directory sizes
+          echo "Cache directory sizes:"
+          du -sh /mnt/shared-cache/sstate-cache 2>/dev/null || echo "  sstate-cache: not accessible"
+          du -sh /mnt/shared-cache/downloads 2>/dev/null || echo "  downloads: not accessible"
                     
           echo "Building ${{ inputs.browser }} with ${{ inputs.chromium_version }}"
           echo "Current directory: $(pwd)"
@@ -374,8 +402,78 @@ jobs:
             exit 1
           fi
           
+          # Create symlinks from hardcoded kas paths to EFS cache directories
+          echo "=== Setting up cache directory symlinks ==="
+          
+          # Remove any existing directories and create symlinks to EFS cache
+          sudo rm -rf /yocto/yocto_dl /yocto/yocto_sstate_chromium /yocto/yocto_sstate_electron
+          sudo mkdir -p /yocto
+          sudo ln -sf /mnt/shared-cache/downloads /yocto/yocto_dl
+          sudo ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
+          sudo ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_electron
+          
+          # Also create ccache directory on local SSD for performance
+          sudo mkdir -p /yocto/yocto_ccache
+          sudo chown -R ubuntu:ubuntu /yocto
+          
+          # Verify symlinks
+          echo "Cache directory symlinks:"
+          ls -la /yocto/
+          echo "Contents of cache directories:"
+          ls -la /mnt/shared-cache/
+          echo "Downloads directory contents (first 10 items):"
+          ls -la /mnt/shared-cache/downloads/ | head -10 || echo "Downloads directory empty"
+          echo "Sstate cache directory contents (first 10 items):"
+          ls -la /mnt/shared-cache/sstate-cache/ | head -10 || echo "Sstate cache directory empty"
+          
+          # Show cache statistics
+          echo "=== Cache Statistics ==="
+          echo "Downloads directory size:"
+          du -sh /mnt/shared-cache/downloads 2>/dev/null || echo "0 bytes"
+          echo "Sstate cache directory size:"
+          du -sh /mnt/shared-cache/sstate-cache 2>/dev/null || echo "0 bytes"
+          
+          # Count cache files
+          DOWNLOADS_COUNT=$(find /mnt/shared-cache/downloads -type f 2>/dev/null | wc -l)
+          SSTATE_COUNT=$(find /mnt/shared-cache/sstate-cache -type f 2>/dev/null | wc -l)
+          echo "Downloads files count: $DOWNLOADS_COUNT"
+          echo "Sstate cache files count: $SSTATE_COUNT"
+          
           # Run the build script
+          echo "=== Starting build with enhanced cache debugging ==="
           ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} ${{ inputs.chromium_version }} ${{ inputs.browser }} ${{ inputs.libc_flavour }}
+          
+          # Post-build cache analysis
+          echo "=== Post-Build Cache Analysis ==="
+          DOWNLOADS_COUNT_AFTER=$(find /mnt/shared-cache/downloads -type f 2>/dev/null | wc -l)
+          SSTATE_COUNT_AFTER=$(find /mnt/shared-cache/sstate-cache -type f 2>/dev/null | wc -l)
+          echo "Downloads files after build: $DOWNLOADS_COUNT_AFTER"
+          echo "Sstate cache files after build: $SSTATE_COUNT_AFTER"
+          echo "Downloads size after build:"
+          du -sh /mnt/shared-cache/downloads 2>/dev/null || echo "0 bytes"
+          echo "Sstate cache size after build:"
+          du -sh /mnt/shared-cache/sstate-cache 2>/dev/null || echo "0 bytes"
+          
+          # Analyze BitBake log for cache utilization
+          echo "=== BitBake Cache Analysis ==="
+          BUILD_LOG=$(find build/tmp/log -name "*.log" -type f | head -1)
+          if [ -n "$BUILD_LOG" ] && [ -f "$BUILD_LOG" ]; then
+            echo "Analyzing build log: $BUILD_LOG"
+            echo "Sstate cache hits:"
+            grep -c "sstate.*Found.*valid" "$BUILD_LOG" 2>/dev/null || echo "0"
+            echo "Sstate cache misses:"
+            grep -c "sstate.*not.*found" "$BUILD_LOG" 2>/dev/null || echo "0"
+            echo "Cache restore operations:"
+            grep -c "restoring.*from sstate" "$BUILD_LOG" 2>/dev/null || echo "0"
+          else
+            echo "No build log found for analysis"
+          fi
+          
+          # Show recent sstate cache activity
+          echo "Most recent sstate cache files (last 10 created):"
+          find /mnt/shared-cache/sstate-cache -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -10 | while read timestamp file; do
+            echo "$(date -d @${timestamp%.*} '+%Y-%m-%d %H:%M:%S') $file"
+          done || echo "No sstate files found"
 
       # Refresh AWS credentials before upload (they may have expired during long build)
       - name: Refresh AWS credentials for artifact upload
