@@ -277,14 +277,11 @@ jobs:
           sudo mkdir -p /yocto/${{ inputs.yocto_version }}
           sudo chown -R ubuntu:ubuntu /yocto
           
-          # Also ensure our working directory exists
-          mkdir -p /home/ubuntu/yocto/${{ inputs.yocto_version }}
-          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
-          
-          # Clean any previous builds
+          # Clean any previous builds in the NVMe-backed directory
+          cd /yocto/${{ inputs.yocto_version }}
           rm -rf meta-browser meta-chromium-test build/tmp/work/*/*/*/pseudo build/tmp/sysroots-components/*/pseudo 2>/dev/null || true
           
-          # Create symlinks to EFS mounts
+          # Create symlinks to EFS mounts (in the build directory)
           ln -sf /mnt/shared-cache/sstate-cache ./sstate-cache
           ln -sf /mnt/shared-cache/downloads ./downloads
           
@@ -292,17 +289,15 @@ jobs:
           ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
           ln -sf /mnt/shared-cache/downloads /yocto/yocto_dl
           
-          # Create other directories that the build script expects
-          sudo mkdir -p /yocto/yocto_ccache /yocto/test-images
-          sudo chown -R ubuntu:ubuntu /yocto/yocto_ccache /yocto/test-images
+          # Create all build directories that the build script expects with proper permissions
+          sudo mkdir -p /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
+          sudo chmod 755 /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
+          sudo chown -R ubuntu:ubuntu /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
           
-          # Ensure kas is in PATH for the build
+          # Ensure kas and other tools are in PATH for the build
           echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
-          
-          # Create other directories that the build script expects with proper permissions
-          sudo mkdir -p /yocto/yocto_ccache /yocto/test-images
-          sudo chmod 755 /yocto/yocto_ccache /yocto/test-images
-          sudo chown -R ubuntu:ubuntu /yocto/yocto_ccache /yocto/test-images
+          echo "export LANG=en_US.UTF-8" >> ~/.bashrc
+          echo "export LC_ALL=en_US.UTF-8" >> ~/.bashrc
           
           # Ensure kas and other tools are in PATH for the build
           echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
@@ -312,7 +307,8 @@ jobs:
       # Clone repositories (check if PR or manual trigger)
       - name: Clone repositories
         run: |
-          cd /home/ubuntu/yocto/${{ inputs.yocto_version }}
+          # Clone directly into the NVMe-backed /yocto directory
+          cd /yocto/${{ inputs.yocto_version }}
           
           if [ "${{ github.event_name }}" = "pull_request" ]; then
               GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
@@ -348,12 +344,18 @@ jobs:
           echo "Home: $HOME"
           which kas || echo "kas not found in PATH"
           
-          # The build script expects to run from /yocto/master
+          # The build script expects to run from /yocto/master (repositories already cloned here)
           cd /yocto/${{ inputs.yocto_version }}
           
-          # Copy the repositories from our working directory
-          cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-browser ./
-          cp -r /home/ubuntu/yocto/${{ inputs.yocto_version }}/meta-chromium-test ./
+          # Verify repositories are present
+          if [ -d "meta-browser" ] && [ -d "meta-chromium-test" ]; then
+            echo "✓ Repositories successfully cloned to /yocto/${{ inputs.yocto_version }}"
+            ls -la meta-browser/ meta-chromium-test/
+          else
+            echo "✗ ERROR: Repositories not found in /yocto/${{ inputs.yocto_version }}"
+            ls -la
+            exit 1
+          fi
           
           # Create cache directories if they don't exist
           sudo mkdir -p /mnt/shared-cache/sstate-cache
