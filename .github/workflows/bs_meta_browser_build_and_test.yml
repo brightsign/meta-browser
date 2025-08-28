@@ -62,10 +62,12 @@ jobs:
     steps:
       # Configure AWS credentials for accessing S3 cache buckets
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1-node16
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws_region }}
           role-to-assume: ${{ inputs.aws_arn_role }}
+          role-session-name: meta-browser-build-${{ github.run_id }}
+          role-duration-seconds: 43200  # 12 hours - maximum for most IAM roles
 
       # Download config file and set environment variables
       - name: Download config file and set env vars from it
@@ -378,10 +380,12 @@ jobs:
       # Refresh AWS credentials before upload (they may have expired during long build)
       - name: Refresh AWS credentials for artifact upload
         if: success()
-        uses: aws-actions/configure-aws-credentials@v1-node16
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ env.AWS_ARN_ROLE }}
+          role-session-name: meta-browser-upload-${{ github.run_id }}
+          role-duration-seconds: 3600  # 1 hour for upload
 
       # Upload build artifacts to S3 (if successful)
       - name: Upload artifacts

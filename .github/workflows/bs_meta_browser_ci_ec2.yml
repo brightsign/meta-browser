@@ -65,10 +65,12 @@ jobs:
       ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1-node16
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws_region }}
           role-to-assume: ${{ inputs.aws_arn_role }}
+          role-session-name: meta-browser-ci-${{ github.run_id }}
+          role-duration-seconds: 43200  # 12 hours for long builds
 
       - name: Download config file and set env vars from it
         run: |
@@ -126,10 +128,11 @@ jobs:
     if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1-node16
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ inputs.aws_arn_role }}
           aws-region: ${{ inputs.aws_region }}
+          role-session-name: meta-browser-ci-cleanup-${{ github.run_id }}
 
       - name: Stop EC2 runner
         uses: brightsign/ec2-github-runner@0fa8b183dd4124fd191ccdbc48b68f0ea46a9634
