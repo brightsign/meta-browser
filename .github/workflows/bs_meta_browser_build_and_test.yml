@@ -106,11 +106,15 @@ jobs:
           echo "✓ AMI verification complete - all dependencies pre-installed"
 
       # Setup large swap space on local NVMe SSD for memory-intensive Yocto builds
-      - name: Setup swap space
+      - name: Setup NVMe storage and swap
         run: |
-          echo "=== Setting up 256GB swap space ==="
+          echo "=== Setting up NVMe storage and swap ==="
+          
+          # Get current user once for all operations
+          CURRENT_USER=$(whoami)
+          echo "Setting up NVMe storage for user: $CURRENT_USER"
+          
           # Check for NVMe storage and set up build directory
-          echo "=== Setting up NVMe storage for build ==="
           if [ -e /dev/nvme1n1 ]; then
             echo "NVMe storage detected, setting up build directory..."
             
@@ -119,18 +123,18 @@ jobs:
               sudo mkfs.ext4 -F /dev/nvme1n1
               sudo mkdir -p /mnt/nvme
               sudo mount /dev/nvme1n1 /mnt/nvme
-              sudo chown ubuntu:ubuntu /mnt/nvme
+              sudo chown $CURRENT_USER:$CURRENT_USER /mnt/nvme
             fi
             
             # Create build directory on NVMe storage
             echo "Setting up build workspace on NVMe storage..."
             sudo mkdir -p /mnt/nvme/yocto-build
-            sudo chown ubuntu:ubuntu /mnt/nvme/yocto-build
+            sudo chown $CURRENT_USER:$CURRENT_USER /mnt/nvme/yocto-build
             
             # Create symlink from /yocto to NVMe storage
             sudo rm -rf /yocto 2>/dev/null || true
             sudo ln -sf /mnt/nvme/yocto-build /yocto
-            sudo chown -h ubuntu:ubuntu /yocto
+            sudo chown -h $CURRENT_USER:$CURRENT_USER /yocto
             
             # Set up swap on NVMe (256GB)
             echo "Creating 256GB swap file on NVMe SSD..."
@@ -154,11 +158,15 @@ jobs:
           echo "Available disk space:"
           df -h
 
-      # Mount EFS file systems
-      - name: Mount EFS file systems
+      # Mount EFS file systems and setup cache directories
+      - name: Setup EFS mounts and cache directories
         run: |
-          # Create mount points
-          sudo mkdir -p /mnt/shared-cache /mnt/git-mirror
+          # Get current user for consistent permission management
+          CURRENT_USER=$(whoami)
+          echo "Setting up EFS mounts and cache directories for user: $CURRENT_USER"
+          
+          # Create mount points and cache directories
+          sudo mkdir -p /mnt/shared-cache/sstate-cache /mnt/shared-cache/downloads /mnt/git-mirror
           
           # Debug DNS resolution
           echo "=== DNS Troubleshooting ==="
@@ -257,52 +265,39 @@ jobs:
           mount | grep mnt || echo "No /mnt filesystems found"
           df -h | grep mnt || echo "No /mnt filesystems in df"
           
-          # Create cache directories even if mounts failed (for graceful degradation)
-          sudo mkdir -p /mnt/shared-cache/sstate-cache
-          sudo mkdir -p /mnt/shared-cache/downloads
-          sudo mkdir -p /mnt/git-mirror
-          
-          # Set permissions
-          sudo chown -R ubuntu:ubuntu /mnt/shared-cache /mnt/git-mirror || true
+          # Set permissions on all cache directories (using current user from above)
+          sudo chown -R $CURRENT_USER:$CURRENT_USER /mnt/shared-cache /mnt/git-mirror
+          sudo chmod -R 755 /mnt/shared-cache
 
-      # Set up build directories with EFS mounts
+      # Set up build directories and environment
       - name: Setup build environment
         run: |
-          # Set environment variables that might be expected
+          # Set environment variables and get current user
           export LANG=en_US.UTF-8
           export LC_ALL=en_US.UTF-8
+          CURRENT_USER=$(whoami)
+          echo "Setting up build environment for user: $CURRENT_USER"
           
-          # Create the expected directory structure for the build script
-          # The build script expects to run from /yocto/master and create dirs in /yocto
-          sudo mkdir -p /yocto/${{ inputs.yocto_version }}
-          sudo chown -R ubuntu:ubuntu /yocto
+          # Setup environment variables for all shells
+          echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
+          echo "export LANG=en_US.UTF-8" >> ~/.bashrc
+          echo "export LC_ALL=en_US.UTF-8" >> ~/.bashrc
+          
+          # Create and setup the build directory structure
+          sudo mkdir -p /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
+          sudo chown -R $CURRENT_USER:$CURRENT_USER /yocto
+          sudo chmod -R 755 /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
           
           # Clean any previous builds in the NVMe-backed directory
           cd /yocto/${{ inputs.yocto_version }}
           rm -rf meta-browser meta-chromium-test build/tmp/work/*/*/*/pseudo build/tmp/sysroots-components/*/pseudo 2>/dev/null || true
           
-          # Create symlinks to EFS mounts (in the build directory)
+          # Create symlinks to EFS mounts in both build directory and /yocto root
           ln -sf /mnt/shared-cache/sstate-cache ./sstate-cache
           ln -sf /mnt/shared-cache/downloads ./downloads
-          
-          # Create symlinks in /yocto to allow the build script to work
           ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
+          ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_electron
           ln -sf /mnt/shared-cache/downloads /yocto/yocto_dl
-          
-          # Create all build directories that the build script expects with proper permissions
-          sudo mkdir -p /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
-          sudo chmod 755 /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
-          sudo chown -R ubuntu:ubuntu /yocto/${{ inputs.yocto_version }} /yocto/yocto_ccache /yocto/test-images
-          
-          # Ensure kas and other tools are in PATH for the build
-          echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
-          echo "export LANG=en_US.UTF-8" >> ~/.bashrc
-          echo "export LC_ALL=en_US.UTF-8" >> ~/.bashrc
-          
-          # Ensure kas and other tools are in PATH for the build
-          echo "export PATH=\$PATH:\$HOME/.local/bin" >> ~/.bashrc
-          echo "export LANG=en_US.UTF-8" >> ~/.bashrc
-          echo "export LC_ALL=en_US.UTF-8" >> ~/.bashrc
 
       # Clone repositories (check if PR or manual trigger)
       - name: Clone repositories
@@ -335,14 +330,14 @@ jobs:
           export LC_ALL=en_US.UTF-8
           export PATH=$PATH:$HOME/.local/bin
           
-          # Debug environment
+          # Debug environment and verify setup
           echo "=== Environment Debug ==="
           echo "PATH: $PATH"
-          echo "LANG: $LANG"
-          echo "LC_ALL: $LC_ALL"
           echo "User: $(whoami)"
-          echo "Home: $HOME"
+          echo "Current directory: $(pwd)"
           which kas || echo "kas not found in PATH"
+          
+          echo "Building ${{ inputs.browser }} with ${{ inputs.chromium_version }}"
           
           # The build script expects to run from /yocto/master (repositories already cloned here)
           cd /yocto/${{ inputs.yocto_version }}
@@ -357,31 +352,20 @@ jobs:
             exit 1
           fi
           
-          # Create cache directories if they don't exist
-          sudo mkdir -p /mnt/shared-cache/sstate-cache
-          sudo mkdir -p /mnt/shared-cache/downloads
-          sudo chown -R ubuntu:ubuntu /mnt/shared-cache/sstate-cache
-          sudo chown -R ubuntu:ubuntu /mnt/shared-cache/downloads
-          sudo chmod -R 755 /mnt/shared-cache/sstate-cache
-          sudo chmod -R 755 /mnt/shared-cache/downloads
-          
-          # Test cache directory accessibility
+          # Display cache status (cache directories already set up in previous step)
+          echo "=== Cache Status ==="
           if [ -w /mnt/shared-cache/sstate-cache ]; then
-            echo "✓ sstate-cache directory is writable"
-            # Check if cache has existing content
             SSTATE_COUNT=$(find /mnt/shared-cache/sstate-cache -name "*.tar.*" | wc -l)
-            echo "  Existing sstate files: $SSTATE_COUNT"
+            echo "✓ sstate-cache directory accessible, existing files: $SSTATE_COUNT"
           else
-            echo "✗ sstate-cache directory is not writable"
+            echo "✗ sstate-cache directory not accessible"
           fi
           
           if [ -w /mnt/shared-cache/downloads ]; then
-            echo "✓ downloads directory is writable"
-            # Check if downloads has existing content
             DOWNLOADS_COUNT=$(find /mnt/shared-cache/downloads -type f | wc -l)
-            echo "  Existing download files: $DOWNLOADS_COUNT"
+            echo "✓ downloads directory accessible, existing files: $DOWNLOADS_COUNT"
           else
-            echo "✗ downloads directory is not writable"
+            echo "✗ downloads directory not accessible"
           fi
           
           # Show cache directory sizes
@@ -397,45 +381,18 @@ jobs:
           
           # Verify the build script exists and is executable
           if [ -f "./meta-chromium-test/scripts/build.sh" ]; then
-            echo "Build script found"
-            ls -la ./meta-chromium-test/scripts/build.sh
+            echo "✓ Build script found and ready"
             chmod +x ./meta-chromium-test/scripts/build.sh
-            echo "=== Build script first 20 lines ==="
-            head -20 ./meta-chromium-test/scripts/build.sh
           else
-            echo "Build script not found!"
+            echo "✗ Build script not found!"
             find . -name "build.sh" 2>/dev/null || echo "No build.sh found anywhere"
             exit 1
           fi
           
-          # Create symlinks from hardcoded kas paths to EFS cache directories
-          echo "=== Setting up cache directory symlinks ==="
-          
-          # Remove any existing directories and create symlinks to EFS cache
-          sudo rm -rf /yocto/yocto_dl /yocto/yocto_sstate_chromium /yocto/yocto_sstate_electron
-          sudo mkdir -p /yocto
-          sudo ln -sf /mnt/shared-cache/downloads /yocto/yocto_dl
-          sudo ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
-          sudo ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_electron
-          
-          # ccache is disabled in kas configuration - no need for ccache directory
+          # Verify cache symlinks (already created in build environment setup)
+          echo "=== Cache Directory Verification ==="
+          ls -la /yocto/ | grep -E "(yocto_dl|yocto_sstate)" || echo "Cache symlinks not found"
           echo "✓ ccache disabled in kas configuration - relying on sstate cache"
-          
-          sudo chown -R ubuntu:ubuntu /yocto
-          
-          # Verify symlinks and show cache statistics
-          echo "Cache directory symlinks:"
-          ls -la /yocto/
-          echo "Downloads directory size:"
-          du -sh /mnt/shared-cache/downloads 2>/dev/null || echo "0 bytes"
-          echo "Sstate cache directory size:"
-          du -sh /mnt/shared-cache/sstate-cache 2>/dev/null || echo "0 bytes"
-          
-          # Count cache files
-          DOWNLOADS_COUNT=$(find /mnt/shared-cache/downloads -type f 2>/dev/null | wc -l)
-          SSTATE_COUNT=$(find /mnt/shared-cache/sstate-cache -type f 2>/dev/null | wc -l)
-          echo "Downloads files count: $DOWNLOADS_COUNT"
-          echo "Sstate cache files count: $SSTATE_COUNT"
           
           # Run the build script
           echo "=== Starting build with enhanced cache debugging ==="
