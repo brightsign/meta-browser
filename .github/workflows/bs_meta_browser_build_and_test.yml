@@ -398,9 +398,15 @@ jobs:
           ls -la /yocto/ | grep -E "(yocto_dl|yocto_sstate)" || echo "Cache symlinks not found"
           echo "✓ ccache disabled in kas configuration - relying on sstate cache"
           
+          # Fix test-images directory permissions (build script needs to write here)
+          echo "=== Fixing test-images directory permissions ==="
+          CURRENT_USER=$(whoami)
+          sudo chown -R $CURRENT_USER:$CURRENT_USER /yocto/test-images
+          sudo chmod 755 /yocto/test-images
+          echo "test-images directory ownership:"
+          ls -la /yocto/ | grep test-images
+          
           # Run the build script
-          echo "=== Starting build with enhanced cache debugging ==="
-                    # Run the build script
           echo "=== Starting build on NVMe storage ==="
           echo "Available disk space:"
           df -h
