@@ -78,9 +78,19 @@ jobs:
           aws s3 cp s3://meta-browser-ci-config-bucket/set_github_env_vars.py .
           python3 set_github_env_vars.py --file config.json
 
-      - name: Start EC2 runner
+      - name: Clean up any leftover runners
+        run: |
+          echo "Checking for any leftover runners from previous runs..."
+          # This is informational only - the action will handle unique labels
+          echo "Current GitHub run context:"
+          echo "Run ID: ${{ github.run_id }}"
+          echo "Run attempt: ${{ github.run_attempt }}"
+          echo "Run number: ${{ github.run_number }}"
+          
+      - name: Start EC2 runner with retry
         id: start-ec2-runner
         uses: brightsign/ec2-github-runner@0fa8b183dd4124fd191ccdbc48b68f0ea46a9634
+        timeout-minutes: 15  # Allow more time for registration
         with:
           mode: start
           github-app-private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
@@ -90,16 +100,17 @@ jobs:
           subnet-id: ${{ env.VPC_SUBNET_ID }}
           security-group-id: ${{ env.VPC_SG_ID }}
           run-as-service-with-user: ubuntu
-          runner-home-dir: /home/ubuntu
-          label: "runner-${{ github.run_id }}-${{ inputs.yocto_version }}-${{ inputs.arch }}-${{ inputs.chromium_version }}"  # Unique label to avoid hostname conflicts
+          label: "mb-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.run_number }}"  # Ultra-unique short label
           aws-resource-tags: > # optional, requires additional permissions
             [
-              {"Key": "Name", "Value": "github-runner-meta-browser-${{ inputs.instance_name_postfix }}"},
+              {"Key": "Name", "Value": "github-runner-meta-browser-${{ inputs.instance_name_postfix }}-${{ github.run_id }}"},
               {"Key": "GitHubRepository", "Value": "${{ github.repository }}"},
               {"Key": "YoctoVersion", "Value": "${{ inputs.yocto_version }}"},
               {"Key": "ChromiumVersion", "Value": "${{ inputs.chromium_version }}"},
               {"Key": "Architecture", "Value": "${{ inputs.arch }}"},
-              {"Key": "RunId", "Value": "${{ github.run_id }}"}
+              {"Key": "RunId", "Value": "${{ github.run_id }}"},
+              {"Key": "RunAttempt", "Value": "${{ github.run_attempt }}"},
+              {"Key": "Browser", "Value": "${{ inputs.browser }}"}
             ]
 
   build-and-test-meta-browser:
