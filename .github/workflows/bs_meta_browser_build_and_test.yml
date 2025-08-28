@@ -109,38 +109,42 @@ jobs:
       - name: Setup swap space
         run: |
           echo "=== Setting up 256GB swap space ==="
-          # Check for NVMe devices (c6id instances have local NVMe storage)
-          if [ -b /dev/nvme1n1 ]; then
-            echo "Found NVMe device: /dev/nvme1n1"
-            echo "Device info:"
-            lsblk /dev/nvme1n1
+          # Check for NVMe storage and set up build directory
+          echo "=== Setting up NVMe storage for build ==="
+          if [ -e /dev/nvme1n1 ]; then
+            echo "NVMe storage detected, setting up build directory..."
             
-            # Create a 256GB swap file on the NVMe device
-            sudo mkfs.ext4 /dev/nvme1n1
-            sudo mkdir -p /mnt/nvme
-            sudo mount /dev/nvme1n1 /mnt/nvme
+            # Create filesystem if not already done
+            if ! mount | grep -q nvme1n1; then
+              sudo mkfs.ext4 -F /dev/nvme1n1
+              sudo mkdir -p /mnt/nvme
+              sudo mount /dev/nvme1n1 /mnt/nvme
+              sudo chown ubuntu:ubuntu /mnt/nvme
+            fi
             
-            echo "Creating 256GB swap file (this may take a few minutes)..."
+            # Create build directory on NVMe storage
+            echo "Setting up build workspace on NVMe storage..."
+            sudo mkdir -p /mnt/nvme/yocto-build
+            sudo chown ubuntu:ubuntu /mnt/nvme/yocto-build
+            
+            # Create symlink from /yocto to NVMe storage
+            sudo rm -rf /yocto 2>/dev/null || true
+            sudo ln -sf /mnt/nvme/yocto-build /yocto
+            sudo chown -h ubuntu:ubuntu /yocto
+            
+            # Set up swap on NVMe (256GB)
+            echo "Creating 256GB swap file on NVMe SSD..."
             sudo fallocate -l 256G /mnt/nvme/swapfile
             sudo chmod 600 /mnt/nvme/swapfile
             sudo mkswap /mnt/nvme/swapfile
             sudo swapon /mnt/nvme/swapfile
             
-            # Optimize swap performance for build workloads
-            echo "Optimizing swap settings for build performance..."
-            echo 10 | sudo tee /proc/sys/vm/swappiness  # Reduce swap usage preference
-            echo 1 | sudo tee /proc/sys/vm/vfs_cache_pressure  # Favor keeping build caches in memory
-            
-            echo "✓ 256GB swap enabled on NVMe SSD with optimized settings"
+            echo "✓ Build directory and swap configured on NVMe storage"
           else
-            echo "No NVMe device found, creating large swap on root filesystem"
-            # Fallback: create large swap file on root filesystem
-            echo "Creating 64GB swap file (reduced size for root filesystem)..."
-            sudo fallocate -l 64G /swapfile
-            sudo chmod 600 /swapfile
-            sudo mkswap /swapfile
-            sudo swapon /swapfile
-            echo "✓ 64GB swap enabled on root filesystem"
+            echo "ERROR: No NVMe device found! c6id.4xlarge should have NVMe storage."
+            echo "Available block devices:"
+            lsblk
+            exit 1
           fi
           
           # Verify swap is active
@@ -412,22 +416,14 @@ jobs:
           sudo ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_chromium
           sudo ln -sf /mnt/shared-cache/sstate-cache /yocto/yocto_sstate_electron
           
-          # Also create ccache directory on local SSD for performance
-          sudo mkdir -p /yocto/yocto_ccache
+          # ccache is disabled in kas configuration - no need for ccache directory
+          echo "✓ ccache disabled in kas configuration - relying on sstate cache"
+          
           sudo chown -R ubuntu:ubuntu /yocto
           
-          # Verify symlinks
+          # Verify symlinks and show cache statistics
           echo "Cache directory symlinks:"
           ls -la /yocto/
-          echo "Contents of cache directories:"
-          ls -la /mnt/shared-cache/
-          echo "Downloads directory contents (first 10 items):"
-          ls -la /mnt/shared-cache/downloads/ | head -10 || echo "Downloads directory empty"
-          echo "Sstate cache directory contents (first 10 items):"
-          ls -la /mnt/shared-cache/sstate-cache/ | head -10 || echo "Sstate cache directory empty"
-          
-          # Show cache statistics
-          echo "=== Cache Statistics ==="
           echo "Downloads directory size:"
           du -sh /mnt/shared-cache/downloads 2>/dev/null || echo "0 bytes"
           echo "Sstate cache directory size:"
@@ -441,6 +437,11 @@ jobs:
           
           # Run the build script
           echo "=== Starting build with enhanced cache debugging ==="
+                    # Run the build script
+          echo "=== Starting build on NVMe storage ==="
+          echo "Available disk space:"
+          df -h
+          
           ./meta-chromium-test/scripts/build.sh ${{ inputs.yocto_version }} ${{ inputs.arch }} ${{ inputs.chromium_version }} ${{ inputs.browser }} ${{ inputs.libc_flavour }}
           
           # Post-build cache analysis
