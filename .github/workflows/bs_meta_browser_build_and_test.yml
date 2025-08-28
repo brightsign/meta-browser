@@ -292,6 +292,10 @@ jobs:
           cd /yocto/${{ inputs.yocto_version }}
           rm -rf meta-browser meta-chromium-test build/tmp/work/*/*/*/pseudo build/tmp/sysroots-components/*/pseudo 2>/dev/null || true
           
+          # Ensure current directory has proper permissions for symlink creation
+          sudo chown $CURRENT_USER:$CURRENT_USER .
+          sudo chmod 755 .
+          
           # Create symlinks to EFS mounts in both build directory and /yocto root
           ln -sf /mnt/shared-cache/sstate-cache ./sstate-cache
           ln -sf /mnt/shared-cache/downloads ./downloads
