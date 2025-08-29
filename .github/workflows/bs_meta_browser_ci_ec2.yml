@@ -18,7 +18,7 @@ on:
         type: string
 
       chromium_version:
-        description: 'Chromium version (ozone-wayland or x11)'
+        description: 'Display backend/Ozone platform (ozone-wayland or x11)'
         required: true
         type: string
 

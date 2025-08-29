@@ -39,7 +39,7 @@ jobs:
       fail-fast: false  # Continue other matrix jobs even if one fails
       matrix:
         yocto_version: [master]
-        chromium_version: [ozone-wayland, x11]
+        ozone_platform: [ozone-wayland, x11]
         libc_flavour: [glibc]
         arch: [arm, aarch64, x86-64]
     uses: ./.github/workflows/bs_meta_browser_ci_ec2.yml
@@ -48,7 +48,7 @@ jobs:
       build_type: "release"
       browser: "chromium"
       yocto_version: ${{ matrix.yocto_version }}
-      chromium_version: ${{ matrix.chromium_version }}
+      chromium_version: ${{ matrix.ozone_platform }}
       libc_flavour: ${{ matrix.libc_flavour }}
       arch: ${{ matrix.arch }}
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"

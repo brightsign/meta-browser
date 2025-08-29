@@ -29,7 +29,7 @@ on:
         type: string
 
       chromium_version:
-        description: 'Chromium version (ozone-wayland or x11)'
+        description: 'Display backend/Ozone platform (ozone-wayland or x11)'
         required: true
         type: string
 
@@ -145,7 +145,7 @@ jobs:
             
             echo "✓ Build directory and swap configured on NVMe storage"
           else
-            echo "ERROR: No NVMe device found! c6id.4xlarge should have NVMe storage."
+            echo "ERROR: No NVMe device found! Instance should have NVMe storage for optimal build performance."
             echo "Available block devices:"
             lsblk
             exit 1
