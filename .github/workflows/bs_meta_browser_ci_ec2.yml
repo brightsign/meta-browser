@@ -69,7 +69,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws_region }}
           role-to-assume: ${{ inputs.aws_arn_role }}
-          role-session-name: meta-browser-ci-${{ github.run_id }}-${{ inputs.browser }}-${{ inputs.arch }}-${{ inputs.chromium_version }}
+          role-session-name: mb-ci-${{ github.run_id }}
           role-duration-seconds: 43200  # 12 hours for long builds
 
       - name: Download config file and set env vars from it
@@ -143,7 +143,7 @@ jobs:
         with:
           role-to-assume: ${{ inputs.aws_arn_role }}
           aws-region: ${{ inputs.aws_region }}
-          role-session-name: meta-browser-ci-cleanup-${{ github.run_id }}-${{ inputs.browser }}-${{ inputs.arch }}-${{ inputs.chromium_version }}
+          role-session-name: mb-cleanup-${{ github.run_id }}
 
       - name: Stop EC2 runner
         uses: brightsign/ec2-github-runner@0fa8b183dd4124fd191ccdbc48b68f0ea46a9634

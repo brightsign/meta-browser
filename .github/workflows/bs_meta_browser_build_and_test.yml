@@ -66,7 +66,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws_region }}
           role-to-assume: ${{ inputs.aws_arn_role }}
-          role-session-name: meta-browser-build-${{ github.run_id }}-${{ inputs.browser }}-${{ inputs.arch }}-${{ inputs.chromium_version }}
+          role-session-name: mb-build-${{ github.run_id }}
           role-duration-seconds: 43200  # 12 hours - maximum for most IAM roles
 
       # Download config file and set environment variables
@@ -459,7 +459,7 @@ jobs:
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ inputs.aws_arn_role }}
-          role-session-name: meta-browser-upload-${{ github.run_id }}-${{ inputs.browser }}-${{ inputs.arch }}-${{ inputs.chromium_version }}
+          role-session-name: mb-upload-${{ github.run_id }}
           role-duration-seconds: 3600  # 1 hour for upload
 
       # Upload build artifacts to S3 (if successful)
