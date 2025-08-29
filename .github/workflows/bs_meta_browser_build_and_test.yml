@@ -271,9 +271,10 @@ jobs:
           mount | grep mnt || echo "No /mnt filesystems found"
           df -h | grep mnt || echo "No /mnt filesystems in df"
           
-          # Set permissions on all cache directories (using current user from above)
-          sudo chown -R $CURRENT_USER:$CURRENT_USER /mnt/shared-cache /mnt/git-mirror
-          sudo chmod -R 755 /mnt/shared-cache
+          # Set permissions on mount points only (not recursive to avoid processing massive cache data)
+          sudo chown $CURRENT_USER:$CURRENT_USER /mnt/shared-cache /mnt/git-mirror
+          sudo chmod 755 /mnt/shared-cache /mnt/git-mirror
+          echo "✓ Mount point permissions set (skipped recursive operation to avoid processing 100GB+ of cache data)"
 
       # Set up build directories and environment
       - name: Setup build environment
