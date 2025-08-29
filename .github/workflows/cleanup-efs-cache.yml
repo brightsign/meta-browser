@@ -45,7 +45,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws_region }}
-          role-to-assume: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
+          role-to-assume: ${{ secrets.AWS_ARN_ROLE }}
 
       # Start EC2 runner for cleanup
       - name: Start EC2 runner
@@ -56,8 +56,8 @@ jobs:
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           ec2-image-id: ami-0ba9883b710398fbb
           ec2-instance-type: ${{ inputs.instance_type }}
-          subnet-id: subnet-06b2fe35df970cb71
-          security-group-id: sg-0905fa8cd994895e8
+          subnet-id: ${{ env.VPC_SUBNET_ID }}
+          security-group-id: ${{ env.VPC_SG_ID }}
           iam-role-name: yocto-github-actions-role
           aws-resource-tags: >
             [
@@ -75,7 +75,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws_region }}
-          role-to-assume: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
+          role-to-assume: ${{ secrets.AWS_ARN_ROLE }}
 
       # Download config and get EFS ID
       - name: Download config file and set env vars from it
@@ -158,7 +158,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws_region }}
-          role-to-assume: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
+          role-to-assume: ${{ secrets.AWS_ARN_ROLE }}
 
       - name: Stop EC2 runner
         uses: machulav/ec2-github-runner@v2

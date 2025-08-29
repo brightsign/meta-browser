@@ -180,7 +180,13 @@ jobs:
           
           # Check if we can reach AWS services
           echo "=== AWS Connectivity Check ==="
-          curl -s --connect-timeout 10 https://s3.amazonaws.com && echo "S3 reachable" || echo "S3 not reachable"
+          if curl -s --connect-timeout 10 https://s3.amazonaws.com; then
+            echo "✓ S3 reachable"
+          else
+            echo "✗ S3 not reachable - this will cause build artifact upload to fail"
+            echo "Network connectivity issue detected"
+            exit 1
+          fi
           
           # Alternative: Use mount target IP if DNS fails
           echo "=== Alternative EFS Mount Strategy ==="
@@ -451,7 +457,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_ARN_ROLE }}
+          role-to-assume: ${{ inputs.aws_arn_role }}
           role-session-name: meta-browser-upload-${{ github.run_id }}
           role-duration-seconds: 3600  # 1 hour for upload
 
@@ -484,11 +490,16 @@ jobs:
             
             # Verify AWS credentials are working
             echo "Verifying AWS credentials..."
-            aws sts get-caller-identity
+            if aws sts get-caller-identity; then
+              echo "✓ AWS credentials verified successfully"
+            else
+              echo "✗ AWS credentials verification failed"
+              exit 1
+            fi
             
             echo "Starting S3 upload..."
-            # Use verbose mode and enable progress tracking
-            if aws s3 sync "$DEPLOY_DIR/" "$S3_PATH" --cli-read-timeout 0 --cli-connect-timeout 60; then
+            # Use quiet mode to avoid excessive logging for large uploads
+            if aws s3 sync "$DEPLOY_DIR/" "$S3_PATH" --cli-read-timeout 0 --cli-connect-timeout 60 --quiet; then
               echo "✓ Artifacts uploaded successfully to $S3_PATH"
               
               # Verify upload

@@ -16,6 +16,16 @@ on:
         required: false
         type: boolean
         default: true
+      instance_type:
+        description: 'EC2 instance type for build (more cores = faster builds)'
+        required: false
+        type: choice
+        options:
+          - 'c6id.4xlarge'   # 16 vCPUs, 32 GB RAM, 1x 950 GB NVMe
+          - 'c6id.8xlarge'   # 32 vCPUs, 64 GB RAM, 1x 1900 GB NVMe
+          - 'c6id.12xlarge'  # 48 vCPUs, 96 GB RAM, 2x 1425 GB NVMe
+          - 'c6id.16xlarge'  # 64 vCPUs, 128 GB RAM, 2x 1900 GB NVMe
+        default: 'c6id.8xlarge'
   pull_request:
     branches:
       - master
@@ -53,7 +63,7 @@ jobs:
       arch: ${{ matrix.arch }}
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
       aws_region: "us-east-1"
-      instance_type: "c6id.8xlarge"
+      instance_type: ${{ github.event.inputs.instance_type || 'c6id.8xlarge' }}
 
   # Local runner (manual dispatch only, when explicitly disabled AWS)
   local-build:
