@@ -14,7 +14,7 @@ PV = "37.1.0-bs.alpha2"
 # Electron-specific source - replace Chromium source with Electron source
 SRC_URI = "https://electron-ci-public-artifact-bucket.s3.amazonaws.com/v${PV}/v${PV}.tar.xz"
 SRC_URI[sha256sum] = "4921ad086f4c7be4374cd6b1e18a22c0f90a58c6b2253b6e90f16ae88c9cfb12"
-S = "${UNPACKDIR}/src"
+S = "${WORKDIR}/src"
 
 SRC_URI += " \
     file://0001-electron-fix-js2c-toolchain-for-Yocto-cross-compilat.patch \
