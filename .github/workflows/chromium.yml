@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false  # Continue other matrix jobs even if one fails
       matrix:
-        yocto_version: [master]
+        yocto_version: [scarthgap]
         ozone_platform: [ozone-wayland, x11]
         libc_flavour: [glibc]
         arch: [arm, aarch64, x86-64]
