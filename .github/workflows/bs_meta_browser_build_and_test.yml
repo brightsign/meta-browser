@@ -329,8 +329,8 @@ jobs:
           git -C meta-browser checkout $GH_REV
           
           # Clone the test repo
-          echo "Cloning meta-chromium-test electron-master branch"
-          git clone https://github.com/brightsign/meta-chromium-test.git
+          echo "Cloning meta-chromium-test scarthgap branch"
+          git clone -b scarthgap https://github.com/brightsign/meta-chromium-test.git
 
       # Run the build
       - name: Build Browser
