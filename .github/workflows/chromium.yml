@@ -98,5 +98,5 @@ jobs:
          git clone $GH_URL
          git -C meta-browser checkout $GH_REV
          # clone the test repo
-         git clone https://github.com/brightsign/meta-chromium-test.git
+         git clone -b scarthgap https://github.com/brightsign/meta-chromium-test.git
          ./meta-chromium-test/scripts/build.sh ${{ matrix.yocto_version}} ${{ matrix.arch }} ${{ matrix.browser_version }} ${{ matrix.browser }} ${{ matrix.libc_flavour}}
