@@ -46,6 +46,16 @@ on:
         required: true
         type: string
 
+      repository:
+        description: 'Repository to clone for the workflow'
+        required: false
+        type: string
+
+      branch:
+        description: 'Branch to checkout for the workflow'
+        required: false
+        type: string
+
 jobs:
   start-runner:
     name: Start self-hosted EC2 runner
@@ -116,6 +126,8 @@ jobs:
       arch: ${{ inputs.arch }}
       aws_arn_role: ${{ inputs.aws_arn_role }}
       aws_region: ${{ inputs.aws_region }}
+      repository: ${{ inputs.repository }}
+      branch: ${{ inputs.branch }}
 
   stop-runner:
     name: Stop self-hosted EC2 runner

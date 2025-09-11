@@ -41,6 +41,16 @@ on:
         required: true
         type: string
 
+      repository:
+        description: 'Repository to clone for the workflow'
+        required: false
+        type: string
+
+      branch:
+        description: 'Branch to checkout for the workflow'
+        required: false
+        type: string
+
 jobs:
   build-and-test-meta-browser:
     name: Build and Test Meta-Browser
@@ -309,6 +319,14 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
               GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
               GH_REV="$GITHUB_HEAD_REF"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.repository }}" != "" ] && [ "${{ github.event.inputs.branch }}" != "" ]; then
+              # For manual dispatch with repository and branch inputs from the calling workflow
+              GH_URL="$GITHUB_SERVER_URL/${{ github.event.inputs.repository }}/meta-browser"
+              GH_REV="${{ github.event.inputs.branch }}"
+          elif [ "${{ inputs.repository }}" != "" ] && [ "${{ inputs.branch }}" != "" ]; then
+              # For inputs passed from reusable workflow calls
+              GH_URL="$GITHUB_SERVER_URL/${{ inputs.repository }}/meta-browser"
+              GH_REV="${{ inputs.branch }}"
           else
               GH_URL="$GITHUB_SERVER_URL/${{ github.repository }}"
               GH_REV="${{ github.ref_name }}"

@@ -60,6 +60,8 @@ jobs:
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
       aws_region: "us-east-1"
       instance_type: ${{ github.event.inputs.instance_type || 'c6id.8xlarge' }}
+      repository: ${{ inputs.repository }}
+      branch: ${{ inputs.branch }}
 
   # Local runner (manual dispatch only, when explicitly disabled AWS)
   local-build:
@@ -85,6 +87,10 @@ jobs:
          if [ "${{ github.event_name }}" = "pull_request" ]; then
              GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
              GH_REV="$GITHUB_HEAD_REF"
+         elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+             # For manual dispatch, use the repository and branch inputs
+             GH_URL="$GITHUB_SERVER_URL/${{ github.event.inputs.repository }}/meta-browser"
+             GH_REV="${{ github.event.inputs.branch }}"
          else
              GH_URL="$GITHUB_SERVER_URL/${{ github.repository }}"
              GH_REV="${{ github.ref_name }}"
