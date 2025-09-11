@@ -47,7 +47,7 @@ on:
         type: string
 
       repository:
-        description: 'Repository to clone for the workflow'
+        description: 'Repository to clone for the workflow (owner/meta-browser format)'
         required: false
         type: string
 

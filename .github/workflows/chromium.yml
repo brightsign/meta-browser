@@ -3,8 +3,8 @@ name: Chromium build- and smoke-test
 on:
   workflow_dispatch:
     inputs:
-      repository:
-        description: 'Repository to clone for the workflow'
+      repository_owner:
+        description: 'Repository owner (e.g., OSSystems, brightsign)'
         required: true
         default: 'OSSystems'
       branch:
@@ -60,7 +60,7 @@ jobs:
       aws_arn_role: "arn:aws:iam::195607249165:role/github-actions-meta-browser-repo"
       aws_region: "us-east-1"
       instance_type: ${{ inputs.instance_type || 'c6id.8xlarge' }}  # Default for PR builds, user choice for manual
-      repository: ${{ inputs.repository }}
+      repository: ${{ inputs.repository_owner }}/meta-browser
       branch: ${{ inputs.branch }}
 
   # Local runner (manual dispatch only, when explicitly disabled AWS)
@@ -81,21 +81,44 @@ jobs:
       - run: |
          mkdir -p /yocto
          cd /yocto
-         rm -rf meta-browser
+         rm -rf meta-browser meta-browser-ci
          # Clean stale pseudo state from any previous interrupted builds
          rm -rf build/tmp/work/*/*/*/pseudo build/tmp/sysroots-components/*/pseudo 2>/dev/null || true
+         
+         # Always clone the current repository first (for CI scripts and meta-chromium-test)
+         echo "=== Cloning CI repository (for build scripts) ==="
+         CI_URL="$GITHUB_SERVER_URL/${{ github.repository }}"
+         CI_REV="${{ github.ref_name }}"
+         echo "Cloning CI repo from $CI_URL, branch/ref: $CI_REV"
+         git clone $CI_URL meta-browser-ci
+         git -C meta-browser-ci checkout $CI_REV
+         
+         # Now determine the source repository to build
          if [ "${{ github.event_name }}" = "pull_request" ]; then
-             GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
-             GH_REV="$GITHUB_HEAD_REF"
+             SOURCE_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
+             SOURCE_REV="$GITHUB_HEAD_REF"
          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
              # For manual dispatch, use the repository and branch inputs
-             GH_URL="$GITHUB_SERVER_URL/${{ github.event.inputs.repository }}/meta-browser"
-             GH_REV="${{ github.event.inputs.branch }}"
+             SOURCE_URL="$GITHUB_SERVER_URL/${{ github.event.inputs.repository_owner }}/meta-browser"
+             SOURCE_REV="${{ github.event.inputs.branch }}"
          else
-             GH_URL="$GITHUB_SERVER_URL/${{ github.repository }}"
-             GH_REV="${{ github.ref_name }}"
+             SOURCE_URL="$CI_URL"
+             SOURCE_REV="$CI_REV"
          fi
-         git clone $GH_URL
-         git -C meta-browser checkout $GH_REV
+         
+         echo "Source URL: $SOURCE_URL"
+         echo "Source REV: $SOURCE_REV"
+         
+         # Clone the source repository (what we want to build)
+         git clone $SOURCE_URL meta-browser
+         git -C meta-browser checkout $SOURCE_REV
+         
+         # Copy meta-chromium-test from CI repo to source repo if needed
+         if [ ! -d "meta-browser/meta-chromium-test" ]; then
+           echo "Copying meta-chromium-test from CI repository to source repository"
+           cp -r meta-browser-ci/meta-chromium-test meta-browser/
+         fi
+         
          # meta-chromium-test is now integrated into meta-browser
-         ./meta-browser/meta-chromium-test/scripts/build.sh ${{ matrix.arch }} ${{ matrix.browser_version }} ${{ matrix.browser }}
+         cd meta-browser
+         ./meta-chromium-test/scripts/build.sh ${{ matrix.arch }} ${{ matrix.browser_version }} ${{ matrix.browser }}

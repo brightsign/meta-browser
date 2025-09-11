@@ -42,7 +42,7 @@ on:
         type: string
 
       repository:
-        description: 'Repository to clone for the workflow'
+        description: 'Repository to clone for the workflow (owner/meta-browser format)'
         required: false
         type: string
 
@@ -316,25 +316,56 @@ jobs:
           # Clone directly into the NVMe-backed /yocto directory
           cd /yocto
           
+          # Always clone the current repository first (for CI scripts and meta-chromium-test)
+          echo "=== Cloning CI repository (for build scripts) ==="
+          CI_URL="$GITHUB_SERVER_URL/${{ github.repository }}"
+          CI_REV="${{ github.ref_name }}"
+          echo "Cloning CI repo from $CI_URL, branch/ref: $CI_REV"
+          git clone $CI_URL meta-browser-ci
+          git -C meta-browser-ci checkout $CI_REV
+          
+          # Now determine the source repository to build
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-              GH_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
-              GH_REV="$GITHUB_HEAD_REF"
+              # For PRs, build the PR source
+              SOURCE_URL="$GITHUB_SERVER_URL/${{ github.event.pull_request.head.repo.full_name }}"
+              SOURCE_REV="$GITHUB_HEAD_REF"
+              echo "=== Cloning PR source repository ==="
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.repository }}" != "" ] && [ "${{ github.event.inputs.branch }}" != "" ]; then
               # For manual dispatch with repository and branch inputs from the calling workflow
-              GH_URL="$GITHUB_SERVER_URL/${{ github.event.inputs.repository }}/meta-browser"
-              GH_REV="${{ github.event.inputs.branch }}"
+              SOURCE_URL="$GITHUB_SERVER_URL/${{ github.event.inputs.repository }}"
+              SOURCE_REV="${{ github.event.inputs.branch }}"
+              echo "=== Cloning specified source repository ==="
           elif [ "${{ inputs.repository }}" != "" ] && [ "${{ inputs.branch }}" != "" ]; then
               # For inputs passed from reusable workflow calls
-              GH_URL="$GITHUB_SERVER_URL/${{ inputs.repository }}/meta-browser"
-              GH_REV="${{ inputs.branch }}"
+              SOURCE_URL="$GITHUB_SERVER_URL/${{ inputs.repository }}"
+              SOURCE_REV="${{ inputs.branch }}"
+              echo "=== Cloning specified source repository ==="
           else
-              GH_URL="$GITHUB_SERVER_URL/${{ github.repository }}"
-              GH_REV="${{ github.ref_name }}"
+              # Default: use the same repository as CI
+              SOURCE_URL="$CI_URL"
+              SOURCE_REV="$CI_REV"
+              echo "=== Using CI repository as source ==="
           fi
           
-          echo "Cloning from $GH_URL, branch/ref: $GH_REV"
-          git clone $GH_URL
-          git -C meta-browser checkout $GH_REV
+          echo "Repository input: '${{ inputs.repository }}'"
+          echo "Branch input: '${{ inputs.branch }}'"
+          echo "Event inputs repository: '${{ github.event.inputs.repository }}'"
+          echo "Event inputs branch: '${{ github.event.inputs.branch }}'"
+          echo "Source URL: $SOURCE_URL"
+          echo "Source REV: $SOURCE_REV"
+          
+          # Clone the source repository (what we want to build)
+          git clone $SOURCE_URL meta-browser
+          git -C meta-browser checkout $SOURCE_REV
+          
+          # Verify what we actually cloned
+          echo "=== Repository clone verification ==="
+          echo "CI repository contents:"
+          ls -la meta-browser-ci/
+          echo "Source repository contents:"
+          ls -la meta-browser/
+          echo "Checking for meta-chromium-test in CI repo:"
+          ls -la meta-browser-ci/meta-chromium-test/ 2>/dev/null || echo "meta-chromium-test directory not found in CI repo"
           
           # meta-chromium-test is now integrated into meta-browser
 
@@ -360,11 +391,21 @@ jobs:
           cd /yocto
           
           # Verify repositories are present
-          if [ -d "meta-browser" ] && [ -d "meta-browser/meta-chromium-test" ]; then
-            echo "✓ Repository successfully cloned to /yocto"
-            ls -la meta-browser/ meta-browser/meta-chromium-test/
+          if [ -d "meta-browser-ci" ] && [ -d "meta-browser-ci/meta-chromium-test" ]; then
+            echo "✓ CI repository with meta-chromium-test found"
+            ls -la meta-browser-ci/ meta-browser-ci/meta-chromium-test/
           else
-            echo "✗ ERROR: Repository not found in /yocto"
+            echo "✗ ERROR: CI repository or meta-chromium-test not found"
+            ls -la
+            exit 1
+          fi
+          
+          if [ -d "meta-browser" ]; then
+            echo "✓ Source repository found"
+            echo "Source repository contents:"
+            ls -la meta-browser/
+          else
+            echo "✗ ERROR: Source repository not found"
             ls -la
             exit 1
           fi
@@ -372,9 +413,9 @@ jobs:
           echo "Building ${{ inputs.browser }} with ${{ inputs.chromium_version }}"
           
           # Verify the build script exists and is executable
-          if [ -f "./meta-browser/meta-chromium-test/scripts/build.sh" ]; then
+          if [ -f "./meta-browser-ci/meta-chromium-test/scripts/build.sh" ]; then
             echo "✓ Build script found and ready"
-            chmod +x ./meta-browser/meta-chromium-test/scripts/build.sh
+            chmod +x ./meta-browser-ci/meta-chromium-test/scripts/build.sh
           else
             echo "✗ Build script not found!"
             find . -name "build.sh" 2>/dev/null || echo "No build.sh found anywhere"
@@ -386,11 +427,22 @@ jobs:
           sudo chown -R $CURRENT_USER:$CURRENT_USER /yocto/test-images
           sudo chmod 755 /yocto/test-images
           
-          # Run the build script
+          # Copy the meta-chromium-test directory from CI repo to source repo
+          # This allows us to use CI scripts with the source code we want to build
+          if [ ! -d "meta-browser/meta-chromium-test" ]; then
+            echo "Copying meta-chromium-test from CI repository to source repository"
+            cp -r meta-browser-ci/meta-chromium-test meta-browser/
+            echo "✓ meta-chromium-test copied successfully"
+          else
+            echo "✓ meta-chromium-test already exists in source repository"
+          fi
+          
+          # Run the build script (it expects to run from meta-browser directory)
           echo "=== Starting build ==="
           df -h
           
-          ./meta-browser/meta-chromium-test/scripts/build.sh ${{ inputs.arch }} ${{ inputs.chromium_version }} ${{ inputs.browser }}
+          cd meta-browser
+          ./meta-chromium-test/scripts/build.sh ${{ inputs.arch }} ${{ inputs.chromium_version }} ${{ inputs.browser }}
 
       # Refresh AWS credentials before upload (they may have expired during long build)
       - name: Refresh AWS credentials for artifact upload
