@@ -8,7 +8,7 @@ repos:
       meta-chromium-test:
   meta-oe:
     url: https://github.com/openembedded/meta-openembedded
-    commit: "1d6095b73fa21062fde2b347cd61b6c5104390d9"
+    commit: "491671faee11ea131feab5a3a451d1a01deb2ab1"
     layers:
       meta-oe:
       meta-networking:
@@ -16,13 +16,23 @@ repos:
       meta-python:
   poky:
     url: https://github.com/yoctoproject/poky.git
-    commit: "9bc47d6a4d23bff5999b69fa2b99e1b32eaa62fb"
+    commit: "ac257900c33754957b2696529682029d997a8f28"
     layers:
       meta:
       meta-poky:
       meta-yocto-bsp:
   meta-clang:
     url: https://github.com/kraj/meta-clang
-    commit: "02e254ba1fb4937530d94a154b4c713c904c2d06"
+    commit: "76596813cd0061bd9818a80926e6900af61fcaa0"
     layers:
       .:
+  meta-lts-mixins:
+    url: https://git.yoctoproject.org/git/meta-lts-mixins
+    commit: "96deb45139df027473faf0938fe006d33c45c375"
+    layers:
+      .:
+
+local_conf_header:
+  scarthgap: |
+    BBMASK += "poky/meta/recipes-devtools/rust"
+    BBMASK += "meta-lts-mixins/recipes-gnome/librsvg"
