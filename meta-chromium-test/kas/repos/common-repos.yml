@@ -8,7 +8,7 @@ repos:
       meta-chromium-test:
   meta-oe:
     url: https://github.com/openembedded/meta-openembedded
-    commit: "491671faee11ea131feab5a3a451d1a01deb2ab1"
+    commit: "5124ac4a658899158f4a7a2ddf1d2ca931ec7d0e"
     layers:
       meta-oe:
       meta-networking:
@@ -16,19 +16,19 @@ repos:
       meta-python:
   poky:
     url: https://github.com/yoctoproject/poky.git
-    commit: "ac257900c33754957b2696529682029d997a8f28"
+    commit: "6a3d16d7b8b9adc096a048e0b2ad463688a23dec"
     layers:
       meta:
       meta-poky:
       meta-yocto-bsp:
   meta-clang:
     url: https://github.com/kraj/meta-clang
-    commit: "76596813cd0061bd9818a80926e6900af61fcaa0"
+    commit: "f26bab34e6c208149fe1ad04521864b663489f4d"
     layers:
       .:
   meta-lts-mixins:
     url: https://git.yoctoproject.org/git/meta-lts-mixins
-    commit: "96deb45139df027473faf0938fe006d33c45c375"
+    commit: "c19b6da5a3afd3c892b3b1b44983e993ac6d5308"
     layers:
       .:
 
