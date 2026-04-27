@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Caner Altinbasak <cal@brightsign.biz>
+Date: Tue, 29 Jul 2025 19:20:00 +0100
+Subject: [PATCH] fix: Guard x11_util platform checks with ozone buildflags
+
+x11_util.cc references kPlatformX11 and kPlatformWayland which are
+only defined when the respective ozone platforms are enabled. Guard
+the checks with SUPPORTS_OZONE_X11 and SUPPORTS_OZONE_WAYLAND
+buildflags to avoid compilation errors on wayland-only builds.
+
+Upstream-Status: Inappropriate [OE-specific]
+---
+ electron/shell/browser/linux/x11_util.cc | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+--- a/electron/shell/browser/linux/x11_util.cc	2026-04-27 19:22:25.674459885 +0100
++++ b/electron/shell/browser/linux/x11_util.cc	2026-04-27 19:22:25.674459885 +0100
+@@ -5,12 +5,13 @@
+ #include "shell/browser/linux/x11_util.h"
+ 
+ #include "build/build_config.h"
++#include "ui/base/ozone_buildflags.h"
+ #include "ui/ozone/platform_selection.h"  // nogncheck
+ 
+ namespace x11_util {
+ 
+ bool IsX11() {
+-#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) && BUILDFLAG(SUPPORTS_OZONE_X11)
+   static const bool is = ui::GetOzonePlatformId() == ui::kPlatformX11;
+   return is;
+ #else
+@@ -19,7 +20,7 @@
+ }
+ 
+ bool IsWayland() {
+-#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) && BUILDFLAG(SUPPORTS_OZONE_WAYLAND)
+   static const bool is = ui::GetOzonePlatformId() == ui::kPlatformWayland;
+   return is;
+ #else
+-- 
+2.39.5

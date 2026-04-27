@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Caner Altinbasak <cal@brightsign.biz>
+Date: Tue, 29 Jul 2025 16:00:00 +0100
+Subject: [PATCH] fix: Remove sanitize_return config unsupported by Clang 20
+
+The sanitize_return config enables -fsanitize=return which triggers
+UBSan feature detection in V8, causing it to include sanitizer
+headers not available in the Yocto scarthgap toolchain. The
+-fsanitize-ignore-for-ubsan-feature flag is also not supported.
+Remove the entire config and its reference in BUILDCONFIG.gn.
+
+Upstream-Status: Inappropriate [OE-specific]
+---
+ build/config/BUILDCONFIG.gn    |  1 -
+ build/config/compiler/BUILD.gn | 17 -----------------
+ 2 files changed, 18 deletions(-)
+
+diff -ruN a/build/config/BUILDCONFIG.gn b/build/config/BUILDCONFIG.gn
+--- a/build/config/BUILDCONFIG.gn	2026-04-27 16:49:01.435974909 +0100
++++ b/build/config/BUILDCONFIG.gn	2026-04-27 16:49:01.447974826 +0100
+@@ -365,7 +365,6 @@
+   "//build/config/compiler:no_unresolved_symbols",
+   "//build/config/compiler:runtime_library",
+   "//build/config/compiler:sanitize_c_array_bounds",
+-  "//build/config/compiler:sanitize_return",
+   "//build/config/compiler:thin_archive",
+   "//build/config/compiler:thinlto_optimize_default",
+   "//build/config/compiler:tot_warnings",
+diff -ruN a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+--- a/build/config/compiler/BUILD.gn	2026-04-27 16:49:01.431974937 +0100
++++ b/build/config/compiler/BUILD.gn	2026-04-27 16:49:01.443974854 +0100
+@@ -1856,23 +1856,6 @@
+   }
+ }
+ 
+-# Enable UBSan subset to ensure we always hit `return` statement in non-void
+-# functions (https://crbug.com/489565636). This is equivalent to inserting
+-# `NOTREACHED()` at the end of such functions.
+-config("sanitize_return") {
+-  if (!is_ubsan && is_clang) {
+-    cflags = [
+-      "-fsanitize=return",
+-      "-fsanitize-trap=return",
+-
+-      # Some code users feature detection to determine if UBSAN (or any
+-      # sanitizer) is enabled, they then do expensive debug like operations. We
+-      # want to suppress this behaviour since we want to keep performance costs
+-      # as low as possible while having these checks.
+-      "-fsanitize-ignore-for-ubsan-feature=return",
+-    ]
+-  }
+-}
+ 
+ config("rustc_revision") {
+   if (rustc_revision != "") {
+-- 
+2.39.5

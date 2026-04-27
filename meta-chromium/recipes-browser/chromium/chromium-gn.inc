@@ -97,6 +97,7 @@ DEPENDS += " \
     pango \
     pciutils \
     ${@bb.utils.contains('DISTRO_FEATURES', 'pulseaudio', 'pulseaudio', '', d)} \
+    udev \
     qemu-native \
     rust-native \
     virtual/libgl \

@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Caner Altinbasak <cal@brightsign.biz>
+Date: Tue, 29 Jul 2025 17:15:00 +0100
+Subject: [PATCH] fix: Guard sanitizer header include with __has_include
+
+The system Clang in Yocto scarthgap does not ship the sanitizer
+runtime headers (sanitizer/common_interface_defs.h). Use
+__has_include to conditionally include the header and provide
+weak no-op stub implementations when it is not available.
+
+Upstream-Status: Inappropriate [OE-specific]
+---
+ v8/src/sandbox/testing.cc | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+--- a/v8/src/sandbox/testing.cc	2026-04-27 18:44:51.471929665 +0100
++++ b/v8/src/sandbox/testing.cc	2026-04-27 18:44:51.579928845 +0100
+@@ -40,7 +40,16 @@
+ #if defined(V8_USE_ADDRESS_SANITIZER) || defined(V8_USE_MEMORY_SANITIZER) || \
+     defined(V8_USE_UNDEFINED_BEHAVIOR_SANITIZER)
+ #define V8_USE_ANY_SANITIZER 1
++#if __has_include(<sanitizer/common_interface_defs.h>)
+ #include <sanitizer/common_interface_defs.h>
++#else
++// Sanitizer header not available in system toolchain - provide no-op stubs
++extern "C" {
++__attribute__((weak)) void __sanitizer_print_stack_trace(void) {}
++__attribute__((weak)) void __sanitizer_set_death_callback(
++    void (*callback)(void)) {}
++}
++#endif
+ #endif
+ 
+ #if defined(V8_ENABLE_SANDBOX) && defined(V8_ENABLE_MEMORY_CORRUPTION_API)
+-- 
+2.39.5

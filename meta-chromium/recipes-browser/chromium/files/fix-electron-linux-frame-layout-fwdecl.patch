@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Caner Altinbasak <cal@brightsign.biz>
+Date: Tue, 29 Jul 2025 19:10:00 +0100
+Subject: [PATCH] fix: Move LinuxFrameLayout forward decl to IS_LINUX guard
+
+LinuxFrameLayout is used under IS_LINUX guards but its forward
+declaration was incorrectly placed inside an IS_OZONE_X11 block,
+causing compilation failures on wayland-only builds.
+
+Upstream-Status: Inappropriate [OE-specific]
+---
+ electron/shell/browser/native_window_views.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/electron/shell/browser/native_window_views.h	2026-04-27 19:09:43.768366137 +0100
++++ b/electron/shell/browser/native_window_views.h	2026-04-27 19:10:45.295887405 +0100
+@@ -35,6 +35,9 @@
+ #if BUILDFLAG(IS_LINUX) && BUILDFLAG(IS_OZONE_X11)
+ class ClientFrameViewLinux;
+ class GlobalMenuBarX11;
++#endif
++
++#if BUILDFLAG(IS_LINUX)
+ class LinuxFrameLayout;
+ #endif
+ 
+-- 
+2.39.5

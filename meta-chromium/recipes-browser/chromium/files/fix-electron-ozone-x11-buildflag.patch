@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Caner Altinbasak <cal@brightsign.biz>
+Date: Tue, 29 Jul 2025 19:00:00 +0100
+Subject: [PATCH] fix: Add missing IS_OZONE_X11 buildflag for Electron
+
+Electron source code references BUILDFLAG(IS_OZONE_X11) in several
+files but the buildflag is not defined in the ozone_buildflags
+header. Add it alongside the existing SUPPORTS_OZONE_X11 flag.
+
+Upstream-Status: Inappropriate [OE-specific]
+---
+ ui/base/BUILD.gn | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/ui/base/BUILD.gn	2026-04-27 18:57:50.501975964 +0100
++++ b/ui/base/BUILD.gn	2026-04-27 18:57:50.509975900 +0100
+@@ -1439,5 +1439,6 @@
+   flags = [
+     "SUPPORTS_OZONE_WAYLAND=$ozone_platform_wayland",
+     "SUPPORTS_OZONE_X11=$ozone_platform_x11",
++    "IS_OZONE_X11=$ozone_platform_x11",
+   ]
+ }
+-- 
+2.39.5
