@@ -1,13 +1,12 @@
 DESCRIPTION = "nodeJS Evented I/O for V8 JavaScript"
 HOMEPAGE = "http://nodejs.org"
 LICENSE = "MIT & ISC & BSD-2-Clause & BSD-3-Clause & Artistic-2.0 & Apache-2.0"
-LIC_FILES_CHKSUM = "file://LICENSE;md5=25e89142a2f4b075904a9986c45fbdb2"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=9f816753e8bdfe4576cb87159a0cd60c"
 
 CVE_PRODUCT = "nodejs node.js"
 
 DEPENDS = "openssl openssl-native file-replacement-native python3-packaging-native"
 DEPENDS:append:class-target = " qemu-native"
-DEPENDS:append:class-native = " c-ares-native"
 
 inherit pkgconfig python3native qemu ptest siteinfo
 
@@ -20,12 +19,8 @@ COMPATIBLE_HOST:riscv32 = "null"
 COMPATIBLE_HOST:powerpc = "null"
 
 SRC_URI = "http://nodejs.org/dist/v${PV}/node-v${PV}.tar.xz \
-           file://0001-Disable-running-gyp-files-for-bundled-deps.patch \
            file://0004-v8-don-t-override-ARM-CFLAGS.patch \
-           file://system-c-ares.patch \
-           file://0001-liftoff-Correct-function-signatures.patch \
            file://libatomic.patch \
-           file://0001-deps-disable-io_uring-support-in-libuv.patch \
            file://0001-positional-args.patch \
            file://0001-custom-env.patch \
            file://run-ptest \
@@ -33,10 +28,7 @@ SRC_URI = "http://nodejs.org/dist/v${PV}/node-v${PV}.tar.xz \
 SRC_URI:append:class-target = " \
            file://0001-Using-native-binaries.patch \
            "
-SRC_URI:append:toolchain-clang:powerpc64le = " \
-           file://0001-ppc64-Do-not-use-mminimal-toc-with-clang.patch \
-           "
-SRC_URI[sha256sum] = "bbf0297761d53aefda9d7855c57c7d2c272b83a7b5bad4fea9cb29006d8e1d35"
+SRC_URI[sha256sum] = "a4f653d79ed140aaad921e8c22a3b585ca85cfdab80d4030f6309e4663a8a1c8"
 
 S = "${WORKDIR}/node-v${PV}"
 
@@ -64,9 +56,8 @@ ARCHFLAGS:append:mips = " --v8-lite-mode"
 ARCHFLAGS:append:mipsel = " --v8-lite-mode"
 ARCHFLAGS ?= ""
 
-PACKAGECONFIG ??= "ares brotli icu zlib"
+PACKAGECONFIG ??= "brotli icu zlib"
 
-PACKAGECONFIG[ares] = "--shared-cares,,c-ares c-ares-native"
 PACKAGECONFIG[brotli] = "--shared-brotli,,brotli brotli-native"
 PACKAGECONFIG[icu] = "--with-intl=system-icu,--without-intl,icu icu-native"
 PACKAGECONFIG[libuv] = "--shared-libuv,,libuv"
